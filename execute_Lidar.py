@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from pointnet_ import PointNetCls, STN
-from your_pointnet2_file import PointNet2ClsSSG  # Replace with your actual file/module name
+from pointnet_ import PointNet2ClsSSG  # Replace with your actual file/module name
 
 # === Dataset Class ===
 class PointCloudDataset(Dataset):
