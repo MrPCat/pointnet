@@ -92,7 +92,7 @@ if __name__ == "__main__":
     train_dataset = PointCloudDataset(train_file, points_per_cloud=1024)
     val_dataset = PointCloudDataset(val_file, points_per_cloud=1024)
 
-    in_dim = train_dataset.features.shape[0]  # Number of feature channels
+    in_dim = train_dataset.features.shape[1]  # Number of feature channels
     num_classes = len(np.unique(train_dataset.labels))  # Number of classe
 
     print(f"Detected input dimension: {in_dim}")
