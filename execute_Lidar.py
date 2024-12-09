@@ -70,8 +70,8 @@ def evaluate_model(model, data_loader, device):
 # === Main Function ===
 if __name__ == "__main__":
     # === Specify File Paths ===
-    train_file = '/content/drive/My Drive/Mar18_train.txt'
-    val_file = '/content/drive/My Drive/Mar18_val.txt'
+    train_file = '/content/drive/MyDrive/t1/Mar18_train.txt'
+    val_file = '/content/drive/MyDrive/t1/Mar18_train.txt'
 
     # === Dataset and DataLoader ===
     batch_size = 16
