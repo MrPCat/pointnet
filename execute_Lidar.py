@@ -6,6 +6,15 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from pointnet_ import PointNetCls, STN
 from pointnet_ import PointNet2ClsSSG 
+import logging
+
+# === Configure Logging ===
+log_file_path = "/content/drive/MyDrive/t1/training_logs.txt"
+logging.basicConfig(filename=log_file_path, level=logging.INFO, format='%(asctime)s - %(message)s')
+
+def log_and_print(message):
+    print(message)  # Print to console
+    logging.info(message)  # Save to log file
 
 # === Dataset Class ===
 class PointCloudDataset(Dataset):
@@ -95,6 +104,9 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
         train_loss = total_loss / len(train_loader)
         val_loss, val_accuracy = validate_model(model, val_loader, criterion, device)
 
+        log_and_print(f"Epoch {epoch+1}/{epochs}, Train Loss: {train_loss:.4f}, "
+                      f"Validation Loss: {val_loss:.4f}, Validation Accuracy: {val_accuracy:.2f}%")
+
         print(f"Epoch {epoch+1}/{epochs}, Train Loss: {train_loss:.4f}, "
               f"Validation Loss: {val_loss:.4f}, Validation Accuracy: {val_accuracy:.2f}%")
 #Testin and evaluating the model 
@@ -112,6 +124,7 @@ def test_model(model, test_loader, device):
             total += labels.size(0)
 
     accuracy = 100 * correct / total
+    log_and_print(f"Test Accuracy: {accuracy:.2f}%")
     print(f"Test Accuracy: {accuracy:.2f}%")            
 
 #"__main__"
@@ -119,6 +132,7 @@ if __name__ == "__main__":
 
     # Check GPU Availability
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    log_and_print(f"Using device: {device}")
     print("Using device:", device)
     
     # Specify File Paths
@@ -145,14 +159,14 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss()
     epochs = 10
 
+    log_and_print("Starting training...")
     # Training with Validation
     print("Starting training...")
     train_model(model, train_loader, val_loader, optimizer, criterion, epochs, device)
 
-    # Testing
-    print("Evaluating on test dataset...")
-    test_model(model, test_loader, device)
 
     # Save the trained model
-    torch.save(model.state_dict(), "/content/drive/MyDrive/t1/pointnet_model.pth")
+    model_path = "/content/drive/MyDrive/t1/pointnet_model.pth"
+    torch.save(model.state_dict(), model_path)
+    log_and_print(f"Model saved to {model_path}")
     print("Model saved to pointnet_model.pth")
