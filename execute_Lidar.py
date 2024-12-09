@@ -154,5 +154,5 @@ if __name__ == "__main__":
     test_model(model, test_loader, device)
 
     # Save the trained model
-    torch.save(model.state_dict(), "pointnet_model.pth")
+    torch.save(model.state_dict(), "/content/drive/MyDrive/t1/pointnet_model.pth")
     print("Model saved to pointnet_model.pth")
