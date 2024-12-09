@@ -16,17 +16,27 @@ class PointCloudDataset(Dataset):
 
     def __getitem__(self, idx):
         point = self.data[idx]
-        xyz = point[:3]
-        other_feats = point[3:-1]
-        label = point[-1]
+        xyz = point[:3]  # Extract XYZ
+        other_feats = point[3:-1]  # Extract all other features except the label
+        label = point[-1]  # Extract the label
 
+        # Debugging print statements
+        print(f"Raw point: {point}")
+        print(f"XYZ: {xyz}, Other Features: {other_feats}, Label: {label}")
+        print(f"Length of features: {len(np.hstack([xyz, other_feats]))}")
+
+        # Normalize XYZ
         xyz -= np.mean(self.data[:, :3], axis=0)
-        features = np.hstack([xyz, other_feats])
+
+        # Combine features
+        features = np.hstack([xyz, other_feats])  # Expecting 10 features
+        print(f"Feature vector shape after stacking: {features.shape}")
 
         # Add a new axis for "points"
         features = np.expand_dims(features, axis=0)
 
         return torch.tensor(features, dtype=torch.float32), torch.tensor(label, dtype=torch.long)
+
 
 # === Model Setup ===
 def create_model(in_dim, num_classes):
@@ -38,6 +48,9 @@ def create_model(in_dim, num_classes):
 def train_model(model, data_loader, optimizer, criterion, epochs, device):
     model.to(device)
     model.train()
+    for features, labels in train_loader:
+        print(f"Features shape in batch: {features.shape}")
+        break
     for epoch in range(epochs):
         total_loss = 0
         for features, labels in data_loader:
