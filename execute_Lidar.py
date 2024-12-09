@@ -94,6 +94,38 @@ def evaluate_model(model, data_loader):
             total += labels.size(0)
     print(f"Accuracy: {correct / total:.2%}")
 
+# === Model Save Function ===
+def save_model(model, optimizer, epoch, path="model_checkpoint.pth"):
+    """
+    Save the model, optimizer, and epoch information.
+    :param model: Trained PointNet model
+    :param optimizer: Optimizer used during training
+    :param epoch: Current epoch
+    :param path: Path to save the checkpoint
+    """
+    torch.save({
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+    }, path)
+    print(f"Model saved to {path}")
+
+# === Model Load Function ===
+def load_model(path, model, optimizer=None):
+    """
+    Load the model and optimizer from a checkpoint.
+    :param path: Path to the checkpoint file
+    :param model: Model instance to load the state into
+    :param optimizer: Optimizer instance to load the state into (optional)
+    :return: Epoch to resume from
+    """
+    checkpoint = torch.load(path)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    if optimizer:
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    print(f"Model loaded from {path}")
+    return checkpoint['epoch']
+
 # === Main Function ===
 if __name__ == "__main__":
     # === Specify File Paths ===
@@ -116,10 +148,18 @@ if __name__ == "__main__":
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     criterion = nn.CrossEntropyLoss()
 
+    # === Check for Existing Model ===
+    checkpoint_path = "model_checkpoint.pth"
+    start_epoch = 0
+    if os.path.exists(checkpoint_path):
+        start_epoch = load_model(checkpoint_path, model, optimizer)
+
     # === Training ===
     epochs = 10
     print("Starting training...")
-    train_model(model, train_loader, optimizer, criterion, epochs)
+    for epoch in range(start_epoch, epochs):
+        train_model(model, train_loader, optimizer, criterion, epochs=1)  # Train one epoch
+        save_model(model, optimizer, epoch + 1, path=checkpoint_path)  # Save after each epoch
 
     # === Evaluation ===
     print("Evaluating on validation set...")
