@@ -83,6 +83,9 @@ if __name__ == "__main__":
     # === Specify File Paths ===
     train_file = '/content/drive/MyDrive/t1/Mar18_train.txt'
     val_file = '/content/drive/MyDrive/t1/Mar18_val.txt'
+    
+    print("Checking train file:", train_file)
+    print("File exists:", os.path.exists(train_file))
 
     # === Dataset and DataLoader ===
     batch_size = 16
