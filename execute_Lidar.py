@@ -20,20 +20,11 @@ class PointCloudDataset(Dataset):
         other_feats = point[3:-1]  # Extract all other features except the label
         label = point[-1]  # Extract the label
 
-        # Debugging print statements
-        print(f"Raw point: {point}")
-        print(f"XYZ: {xyz}, Other Features: {other_feats}, Label: {label}")
-        print(f"Length of features: {len(np.hstack([xyz, other_feats]))}")
-
         # Normalize XYZ
         xyz -= np.mean(self.data[:, :3], axis=0)
 
         # Combine features
         features = np.hstack([xyz, other_feats])  # Expecting 10 features
-        print(f"Feature vector shape after stacking: {features.shape}")
-
-        # Add a new axis for "points"
-        features = np.expand_dims(features, axis=0)
 
         return torch.tensor(features, dtype=torch.float32), torch.tensor(label, dtype=torch.long)
 
@@ -48,14 +39,13 @@ def create_model(in_dim, num_classes):
 def train_model(model, data_loader, optimizer, criterion, epochs, device):
     model.to(device)
     model.train()
-    for features, labels in train_loader:
-        print(f"Features shape in batch: {features.shape}")
-        break
+    
     for epoch in range(epochs):
         total_loss = 0
         for features, labels in data_loader:
-            # Reshape features to [batch_size, channels, points]
-            features = features.permute(0, 2, 1).to(device)
+            # Reshape features to [batch_size, points, features]
+            features = features.unsqueeze(1)  # Add channel dimension
+            features = features.to(device)
             labels = labels.to(device)
 
             optimizer.zero_grad()
@@ -69,14 +59,14 @@ def train_model(model, data_loader, optimizer, criterion, epochs, device):
 
 # === Evaluation ===
 def evaluate_model(model, data_loader, device):
-    model.to(device)  # Ensure the model is on the GPU
+    model.to(device)
     model.eval()
     correct = 0
     total = 0
     with torch.no_grad():
         for features, labels in data_loader:
-            features = features.transpose(1, 2).to(device)  # Move to GPU
-            labels = labels.to(device)  # Move labels to GPU
+            features = features.unsqueeze(1).to(device)
+            labels = labels.to(device)
 
             logits = model(features)
             preds = torch.argmax(logits, dim=1)
