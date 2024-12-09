@@ -137,7 +137,7 @@ if __name__ == "__main__":
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     # Model, Optimizer, and Loss Function
-    in_dim = train_dataset.features.shape[0]
+    in_dim = train_dataset.features.shape[1]
     num_classes = len(np.unique(train_dataset.labels))
 
     model = PointNet2ClsSSG(in_dim=in_dim, out_dim=num_classes, downsample_points=(512, 128))
