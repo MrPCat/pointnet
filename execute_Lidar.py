@@ -84,7 +84,7 @@ def create_model(in_dim, num_classes):
 
 
 # === Training Loop ===
-def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, device):
+def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, device, save_dir):
     model.to(device)
 
     for epoch in range(epochs):
@@ -107,8 +107,12 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
         log_and_print(f"Epoch {epoch+1}/{epochs}, Train Loss: {train_loss:.4f}, "
                       f"Validation Loss: {val_loss:.4f}, Validation Accuracy: {val_accuracy:.2f}%")
 
-        print(f"Epoch {epoch+1}/{epochs}, Train Loss: {train_loss:.4f}, "
-              f"Validation Loss: {val_loss:.4f}, Validation Accuracy: {val_accuracy:.2f}%")
+        # Save model after each epoch
+        epoch_model_path = os.path.join(save_dir, f"pointnet_epoch_{epoch+1}.pth")
+        torch.save(model.state_dict(), epoch_model_path)
+        log_and_print(f"Model checkpoint saved to {epoch_model_path}")
+
+
 #Testin and evaluating the model 
 def test_model(model, test_loader, device):
     model.eval()
@@ -159,10 +163,15 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss()
     epochs = 10
 
-    log_and_print("Starting training...")
+    # Directory for saving checkpoints
+    save_dir = "/content/drive/MyDrive/t1/checkpoints"
+    os.makedirs(save_dir, exist_ok=True)
+
     # Training with Validation
-    print("Starting training...")
     train_model(model, train_loader, val_loader, optimizer, criterion, epochs, device)
+    log_and_print("Starting training...")
+    train_model(model, train_loader, val_loader, optimizer, criterion, epochs, device, save_dir)
+
 
 
     # Save the trained model
