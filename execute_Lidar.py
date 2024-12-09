@@ -168,7 +168,6 @@ if __name__ == "__main__":
     os.makedirs(save_dir, exist_ok=True)
 
     # Training with Validation
-    train_model(model, train_loader, val_loader, optimizer, criterion, epochs, device)
     log_and_print("Starting training...")
     train_model(model, train_loader, val_loader, optimizer, criterion, epochs, device, save_dir)
 
