@@ -23,6 +23,9 @@ class PointCloudDataset(Dataset):
         xyz -= np.mean(self.data[:, :3], axis=0)
         features = np.hstack([xyz, other_feats])
 
+        # Add a new axis for "points"
+        features = np.expand_dims(features, axis=0)
+
         return torch.tensor(features, dtype=torch.float32), torch.tensor(label, dtype=torch.long)
 
 # === Model Setup ===
@@ -33,13 +36,14 @@ def create_model(in_dim, num_classes):
 
 # === Training Loop ===
 def train_model(model, data_loader, optimizer, criterion, epochs, device):
-    model.to(device)  # Move the model to GPU
+    model.to(device)
     model.train()
     for epoch in range(epochs):
         total_loss = 0
         for features, labels in data_loader:
-            features = features.transpose(1, 2).to(device)  # Move to GPU
-            labels = labels.to(device)  # Move labels to GPU
+            # Reshape features to [batch_size, channels, points]
+            features = features.permute(0, 2, 1).to(device)
+            labels = labels.to(device)
 
             optimizer.zero_grad()
             logits = model(features)
@@ -71,7 +75,7 @@ def evaluate_model(model, data_loader, device):
 if __name__ == "__main__":
     # === Specify File Paths ===
     train_file = '/content/drive/MyDrive/t1/Mar18_train.txt'
-    val_file = '/content/drive/MyDrive/t1/Mar18_train.txt'
+    val_file = '/content/drive/MyDrive/t1/Mar18_val.txt'
 
     # === Dataset and DataLoader ===
     batch_size = 16
