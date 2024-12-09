@@ -42,6 +42,28 @@ class PointCloudDataset(Dataset):
         return features, xyz, label
 
 
+# for validating the model and hyperparameters there
+def validate_model(model, data_loader, criterion, device):
+    model.eval()  # Set model to evaluation mode
+    total_loss = 0
+    correct = 0
+    total = 0
+
+    with torch.no_grad():
+        for features, xyz, labels in data_loader:
+            features, xyz, labels = features.to(device), xyz.to(device), labels.to(device)
+            logits = model(features, xyz)
+            loss = criterion(logits, labels)
+            total_loss += loss.item()
+
+            # Calculate accuracy
+            predicted = torch.argmax(logits, dim=1)
+            correct += (predicted == labels).sum().item()
+            total += labels.size(0)
+
+    avg_loss = total_loss / len(data_loader)
+    accuracy = 100 * correct / total
+    return avg_loss, accuracy
 
 # === Model Setup ===
 def create_model(in_dim, num_classes):
@@ -52,17 +74,14 @@ def create_model(in_dim, num_classes):
 
 
 # === Training Loop ===
-def train_model(model, data_loader, optimizer, criterion, epochs, device):
+def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, device):
     model.to(device)
-    model.train()
-    
-    for epoch in range(epochs):
-        total_loss = 0
-        for features, xyz, labels in data_loader:
-            print(f"Features shape: {features.shape}")
-            print(f"XYZ shape: {xyz.shape}")
-            print(f"Labels shape: {labels.shape}")
 
+    for epoch in range(epochs):
+        model.train()
+        total_loss = 0
+
+        for features, xyz, labels in train_loader:
             features, xyz, labels = features.to(device), xyz.to(device), labels.to(device)
 
             optimizer.zero_grad()
@@ -72,65 +91,62 @@ def train_model(model, data_loader, optimizer, criterion, epochs, device):
             optimizer.step()
             total_loss += loss.item()
 
-        print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss / len(data_loader)}")
+        train_loss = total_loss / len(train_loader)
+        val_loss, val_accuracy = validate_model(model, val_loader, criterion, device)
+
+        print(f"Epoch {epoch+1}/{epochs}, Train Loss: {train_loss:.4f}, "
+              f"Validation Loss: {val_loss:.4f}, Validation Accuracy: {val_accuracy:.2f}%")
+#Testin and evaluating the model 
+def test_model(model, test_loader, device):
+    model.eval()
+    correct = 0
+    total = 0
+
+    with torch.no_grad():
+        for features, xyz, labels in test_loader:
+            features, xyz, labels = features.to(device), xyz.to(device), labels.to(device)
+            logits = model(features, xyz)
+            predicted = torch.argmax(logits, dim=1)
+            correct += (predicted == labels).sum().item()
+            total += labels.size(0)
+
+    accuracy = 100 * correct / total
+    print(f"Test Accuracy: {accuracy:.2f}%")            
 
 
-# === Main Function ===
 if __name__ == "__main__":
-    # === Specify File Paths ===
-    train_file = '/content/drive/MyDrive/t1/Mar18_train.txt'
-    val_file = '/content/drive/MyDrive/t1/Mar18_val.txt'
+    # Specify File Paths
+    train_file = '/path/to/train.txt'
+    val_file = '/path/to/val.txt'
+    test_file = '/path/to/test.txt'
 
-    # === Dataset and DataLoader ===
+    # Dataset and DataLoader
     batch_size = 16
-
-    # First, inspect the data
-    sample_data = np.loadtxt(train_file, skiprows=1)
-    print("Sample data shape:", sample_data.shape)
-    print("Sample data first row:", sample_data[0])
-
     train_dataset = PointCloudDataset(train_file, points_per_cloud=1024)
     val_dataset = PointCloudDataset(val_file, points_per_cloud=1024)
-
-    in_dim = train_dataset.features.shape[1]  # Number of feature channels
-    num_classes = len(np.unique(train_dataset.labels))  # Number of classe
-
-    print(f"Detected input dimension: {in_dim}")
-    print(f"Detected number of classes: {num_classes}")
+    test_dataset = PointCloudDataset(test_file, points_per_cloud=1024)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-    # === Inspect a batch from DataLoader ===
-    for features, xyz, label in train_loader:
-        print(f"Features shape: {features.shape}")  # Expected: [Batch size, F, Points]
-        print(f"XYZ shape: {xyz.shape}")            # Expected: [Batch size, 3, Points]
-        print(f"Labels shape: {label.shape}")       # Expected: [Batch size]
-        break  # Inspect only the first batch
+    # Model, Optimizer, and Loss Function
+    in_dim = train_dataset.features.shape[0]
+    num_classes = len(np.unique(train_dataset.labels))
 
-    # === Check GPU Availability ===
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print("Using device:", device)
-
-    downsample_points = (512, 128)  # Example: Use a maximum of 512 points per cloud
-    model = PointNet2ClsSSG(
-    in_dim=in_dim,
-    out_dim=num_classes,
-    downsample_points=downsample_points)
-
-    # === Initialize Model ===
-    model = PointNet2ClsSSG(in_dim=in_dim, out_dim=num_classes)
-
-    # Test model with a batch
-    for batch_features, batch_xyz, batch_labels in train_loader:
-        output = model(batch_features, batch_xyz)  # Pass features and xyz to model
-        print(f"Model output shape: {output.shape}")  # Expected: [Batch size, num_classes]
-        break
-
-    # === Training ===
+    model = PointNet2ClsSSG(in_dim=in_dim, out_dim=num_classes, downsample_points=(512, 128))
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     criterion = nn.CrossEntropyLoss()
     epochs = 10
 
+    # Training with Validation
     print("Starting training...")
-    train_model(model, train_loader, optimizer, criterion, epochs, device)
+    train_model(model, train_loader, val_loader, optimizer, criterion, epochs, device)
+
+    # Testing
+    print("Evaluating on test dataset...")
+    test_model(model, test_loader, device)
+
+    # Save the trained model
+    torch.save(model.state_dict(), "pointnet_model.pth")
+    print("Model saved to pointnet_model.pth")
