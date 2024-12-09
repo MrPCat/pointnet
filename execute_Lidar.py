@@ -44,6 +44,7 @@ class PointCloudDataset(Dataset):
 
 # for validating the model and hyperparameters there
 def validate_model(model, data_loader, criterion, device):
+
     model.eval()  # Set model to evaluation mode
     total_loss = 0
     correct = 0
@@ -113,12 +114,17 @@ def test_model(model, test_loader, device):
     accuracy = 100 * correct / total
     print(f"Test Accuracy: {accuracy:.2f}%")            
 
-
+#"__main__"
 if __name__ == "__main__":
+
+    # Check GPU Availability
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print("Using device:", device)
+    
     # Specify File Paths
-    train_file = '/path/to/train.txt'
-    val_file = '/path/to/val.txt'
-    test_file = '/path/to/test.txt'
+    train_file = '/content/drive/MyDrive/t1/Mar18_train.txt'
+    val_file = '/content/drive/MyDrive/t1/Mar18_val.txt'
+    test_file = '/content/drive/MyDrive/t1/Mar18_test.txt'
 
     # Dataset and DataLoader
     batch_size = 16
