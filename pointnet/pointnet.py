@@ -1,114 +1,197 @@
-import os
-import numpy as np
 import torch
 import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
-from pointnet import PointNetCls, STN
+import torch.nn.functional as F
+from einops import rearrange, repeat
 
-# === Dataset Class ===
-class PointCloudDataset(Dataset):
-    def __init__(self, file_path):
-        # Load the entire dataset
-        self.data = np.loadtxt(file_path, skiprows=1)
-        
-        # Separate features and labels
-        self.points = self.data[:, :-1]
-        self.labels = self.data[:, -1]
-        
-        # Normalize points (assuming first 3 columns are XYZ)
-        self.points[:, :3] -= np.mean(self.points[:, :3], axis=0)
 
-    def __len__(self):
-        return len(self.data)
+def exists(val):
+    return val is not None
 
-    def __getitem__(self, idx):
-        # Get point features and label
-        point_features = self.points[idx]
-        label = self.labels[idx]
-        
-        # Convert to tensor with shape [num_features, num_points]
-        # PointNet typically expects [num_features, num_points]
-        features = torch.tensor(point_features, dtype=torch.float32).unsqueeze(1)
-        label = torch.tensor(label, dtype=torch.long)
-        
-        return features, label
 
-# === Model Setup ===
-def create_model(in_dim, num_classes):
-    stn_3d = STN(in_dim=in_dim, out_nd=3)
-    model = PointNetCls(in_dim=in_dim, out_dim=num_classes, stn_3d=stn_3d)
-    return model
+def default(*vals):
+    for val in vals:
+        if exists(val):
+            return val
 
-# === Training Loop ===
-def train_model(model, data_loader, optimizer, criterion, epochs, device):
-    model.to(device)
-    model.train()
-    
-    for epoch in range(epochs):
-        total_loss = 0
-        for features, labels in data_loader:
-            # Reshape features to [batch_size, num_features, num_points]
-            features = features.to(device)
-            labels = labels.to(device)
 
-            optimizer.zero_grad()
-            logits = model(features)
-            loss = criterion(logits, labels)
-            loss.backward()
-            optimizer.step()
-            total_loss += loss.item()
+class STN(nn.Module):
+    # perform spatial transformation in n-dimensional space
 
-        print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss / len(data_loader)}")
+    def __init__(self, in_dim=3, out_nd=None, head_norm=True):
+        super().__init__()
+        self.in_dim = in_dim
+        self.out_nd = default(out_nd, in_dim)
 
-# === Evaluation ===
-def evaluate_model(model, data_loader, device):
-    model.to(device)
-    model.eval()
-    correct = 0
-    total = 0
-    with torch.no_grad():
-        for features, labels in data_loader:
-            features = features.to(device)
-            labels = labels.to(device)
+        self.net = nn.Sequential(
+            nn.Conv1d(in_dim, 64, 1, bias=False),
+            nn.BatchNorm1d(64),
+            nn.GELU(),
+            nn.Conv1d(64, 128, 1, bias=False),
+            nn.BatchNorm1d(128),
+            nn.GELU(),
+            nn.Conv1d(128, 1024, 1, bias=False),
+        )
 
-            logits = model(features)
-            preds = torch.argmax(logits, dim=1)
-            correct += (preds == labels).sum().item()
-            total += labels.size(0)
-    print(f"Accuracy: {correct / total:.2%}")
+        norm = nn.BatchNorm1d if head_norm else nn.Identity
+        self.norm = norm(1024)
+        self.act = nn.GELU()
 
-# === Main Function =====
-if __name__ == "__main__":
-    # === Specify File Paths ===
-    train_file = '/content/drive/MyDrive/t1/Mar18_train.txt'
-    val_file = '/content/drive/MyDrive/t1/Mar18_val.txt'
+        self.head = nn.Sequential(
+            nn.Linear(1024, 512, bias=False),
+            norm(512),
+            nn.GELU(),
+            nn.Linear(512, 256, bias=False),
+            norm(256),
+            nn.GELU(),
+            nn.Linear(256, self.out_nd ** 2),
+        )
 
-    # === Dataset and DataLoader ===
-    batch_size = 16
-    train_dataset = PointCloudDataset(train_file)
-    val_dataset = PointCloudDataset(val_file)
+        nn.init.normal_(self.head[-1].weight, 0, 0.001)
+        nn.init.eye_(self.head[-1].bias.view(self.out_nd, self.out_nd))
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    def forward(self, x):
+        # x: (b, d, n)
+        x = self.net(x)
+        x = torch.max(x, dim=-1, keepdim=False)[0]
+        x = self.act(self.norm(x))
 
-    # === Model Parameters ===
-    in_dim = 10  # Make sure this matches your input feature dimension
-    num_classes = 5
+        x = self.head(x)
+        x = rearrange(x, "b (x y) -> b x y", x=self.out_nd, y=self.out_nd)
+        return x
 
-    # === Check GPU Availability ===
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print("Using device:", device)
 
-    model = create_model(in_dim, num_classes)
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-    criterion = nn.CrossEntropyLoss()
+class PointNetCls(nn.Module):
+    def __init__(
+            self,
+            in_dim,
+            out_dim,
+            *,
+            stn_3d=STN(in_dim=3),  # if None, no stn_3d
+            with_head=True,
+            head_norm=True,
+            dropout=0.3,
+    ):
+        super().__init__()
+        self.with_head = with_head
 
-    # === Training ===
-    epochs = 10
-    print("Starting training...")
-    train_model(model, train_loader, optimizer, criterion, epochs, device)
+        # if using stn, put other features behind xyz
+        self.stn_3d = stn_3d
 
-    # === Evaluation ===
-    print("Evaluating on validation set...")
-    evaluate_model(model, val_loader, device)
+        self.conv1 = nn.Sequential(
+            nn.Conv1d(in_dim, 64, 1, bias=False),
+            nn.BatchNorm1d(64),
+            nn.GELU(),
+            nn.Conv1d(64, 64, 1, bias=False),
+            nn.BatchNorm1d(64),
+            nn.GELU(),
+        )
+
+        self.stn_nd = STN(in_dim=64, head_norm=head_norm)
+        self.conv2 = nn.Sequential(
+            nn.Conv1d(64, 64, 1, bias=False),
+            nn.BatchNorm1d(64),
+            nn.GELU(),
+            nn.Conv1d(64, 128, 1, bias=False),
+            nn.BatchNorm1d(128),
+            nn.GELU(),
+            nn.Conv1d(128, 1024, 1, bias=False),
+        )
+
+        norm = nn.BatchNorm1d if head_norm else nn.Identity
+        self.norm = norm(1024)
+        self.act = nn.GELU()
+
+        if self.with_head:
+            self.head = nn.Sequential(
+                nn.Linear(1024, 512, bias=False),
+                norm(512),
+                nn.GELU(),
+                nn.Linear(512, 256, bias=False),
+                norm(256),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(256, out_dim),
+            )
+
+    def forward(self, x):
+        # x: (b, d, n)
+        if exists(self.stn_3d):
+            transform_3d = self.stn_3d(x)
+            if x.size(1) == 3:
+                x = torch.bmm(transform_3d, x)
+            elif x.size(1) > 3:
+                x = torch.cat([torch.bmm(transform_3d, x[:, :3]), x[:, 3:]], dim=1)
+            else:
+                raise ValueError(f"invalid input dimension: {x.size(1)}")
+
+        x = self.conv1(x)
+        transform_nd = self.stn_nd(x)
+        x = torch.bmm(transform_nd, x)
+        x = self.conv2(x)
+
+        x = torch.max(x, dim=-1, keepdim=False)[0]
+        x = self.act(self.norm(x))
+
+        if self.with_head:
+            x = self.head(x)
+        return x
+
+
+class PointNetSeg(nn.Module):
+
+    def __init__(
+            self,
+            in_dim,
+            out_dim,
+            *,
+            stn_3d=STN(in_dim=3),  # if None, no stn_3d
+            global_head_norm=True,  # if using normalization in the global head, disable it if batch size is 1
+    ):
+        super().__init__()
+
+        self.backbone = PointNetCls(in_dim=in_dim,
+                                    out_dim=out_dim,
+                                    stn_3d=stn_3d,
+                                    head_norm=global_head_norm,
+                                    with_head=False)
+
+        self.head = nn.Sequential(
+            nn.Conv1d(1024 + 64, 512, 1, bias=False),
+            nn.BatchNorm1d(512),
+            nn.GELU(),
+            nn.Conv1d(512, 256, 1, bias=False),
+            nn.BatchNorm1d(256),
+            nn.GELU(),
+            nn.Conv1d(256, 128, 1, bias=False),
+            nn.BatchNorm1d(128),
+            nn.GELU(),
+            nn.Conv1d(128, out_dim, 1),
+        )
+
+    def forward_backbone(self, x):
+        # x: (b, d, n)
+        if exists(self.backbone.stn_3d):
+            transform_3d = self.backbone.stn_3d(x)
+            if x.size(1) == 3:
+                x = torch.bmm(transform_3d, x)
+            elif x.size(1) > 3:
+                x = torch.cat([torch.bmm(transform_3d, x[:, :3]), x[:, 3:]], dim=1)
+            else:
+                raise ValueError(f"invalid input dimension: {x.size(1)}")
+
+        x = self.backbone.conv1(x)
+        transform_nd = self.backbone.stn_nd(x)
+        x = torch.bmm(transform_nd, x)
+
+        global_feat = self.backbone.conv2(x)
+        global_feat = torch.max(global_feat, dim=-1, keepdim=False)[0]
+        global_feat = self.backbone.act(self.backbone.norm(global_feat))
+        return x, global_feat
+
+    def forward(self, x):
+        # x: (b, d, n)
+        x, global_feat = self.forward_backbone(x)
+        global_feat = repeat(global_feat, "b d -> b d n", n=x.size(-1))
+        x = torch.cat([x, global_feat], dim=1)
+        x = self.head(x)
+        return x

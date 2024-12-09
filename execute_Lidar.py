@@ -6,28 +6,33 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from pointnet import PointNetCls, STN
 
-# === Dataset Class ===
+# ====== Dataset Class ======
 class PointCloudDataset(Dataset):
     def __init__(self, file_path):
+        # Load the entire dataset
         self.data = np.loadtxt(file_path, skiprows=1)
+        
+        # Separate features and labels
+        self.points = self.data[:, :-1]
+        self.labels = self.data[:, -1]
+        
+        # Normalize points (assuming first 3 columns are XYZ)
+        self.points[:, :3] -= np.mean(self.points[:, :3], axis=0)
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
-        point = self.data[idx]
-        xyz = point[:3]  # Extract XYZ
-        other_feats = point[3:-1]  # Extract all other features except the label
-        label = point[-1]  # Extract the label
-
-        # Normalize XYZ
-        xyz -= np.mean(self.data[:, :3], axis=0)
-
-        # Combine features
-        features = np.hstack([xyz, other_feats])  # Expecting 10 features
-
-        return torch.tensor(features, dtype=torch.float32), torch.tensor(label, dtype=torch.long)
-
+        # Get point features and label
+        point_features = self.points[idx]
+        label = self.labels[idx]
+        
+        # Convert to tensor with shape [num_features, num_points]
+        # PointNet typically expects [num_features, num_points]
+        features = torch.tensor(point_features, dtype=torch.float32).unsqueeze(1)
+        label = torch.tensor(label, dtype=torch.long)
+        
+        return features, label
 
 # === Model Setup ===
 def create_model(in_dim, num_classes):
@@ -43,8 +48,7 @@ def train_model(model, data_loader, optimizer, criterion, epochs, device):
     for epoch in range(epochs):
         total_loss = 0
         for features, labels in data_loader:
-            # Reshape features to [batch_size, points, features]
-            features = features.unsqueeze(1)  # Add channel dimension
+            # Reshape features to [batch_size, num_features, num_points]
             features = features.to(device)
             labels = labels.to(device)
 
@@ -65,7 +69,7 @@ def evaluate_model(model, data_loader, device):
     total = 0
     with torch.no_grad():
         for features, labels in data_loader:
-            features = features.unsqueeze(1).to(device)
+            features = features.to(device)
             labels = labels.to(device)
 
             logits = model(features)
@@ -89,7 +93,7 @@ if __name__ == "__main__":
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
     # === Model Parameters ===
-    in_dim = 10
+    in_dim = 10  # Make sure this matches your input feature dimension
     num_classes = 5
 
     # === Check GPU Availability ===
