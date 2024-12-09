@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
-from pointnet import PointNetCls, STN
+from pointnet_ import PointNetCls, STN
 
 # === Dataset Class ===
 class PointCloudDataset(Dataset):
