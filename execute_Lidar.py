@@ -5,51 +5,50 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from pointnet_ import PointNetCls, STN
+from your_pointnet2_file import PointNet2ClsSSG  # Replace with your actual file/module name
 
 # === Dataset Class ===
 class PointCloudDataset(Dataset):
     def __init__(self, file_path):
         # Load the entire dataset
-        self.data = np.loadtxt(file_path, skiprows=1)
-        
-        # Separate features and labels
-        self.points = self.data[:, :-1]
-        self.labels = self.data[:, -1]
-        
-        # Normalize points (assuming first 3 columns are XYZ)
-        self.points[:, :3] -= np.mean(self.points[:, :3], axis=0)
+        self.data = np.loadtxt(file_path, delimiter=',', skiprows=1)
+
+        # Split into xyz, features, and labels
+        self.xyz = self.data[:, :3]  # First 3 columns are X, Y, Z
+        self.features = self.data[:, 3:-1]  # Columns 4 to second last are features
+        self.labels = self.data[:, -1]  # Last column is Classification
+
+        # Normalize spatial coordinates
+        self.xyz -= np.mean(self.xyz, axis=0)
 
         # Verify input dimensions
-        print(f"Dataset shape: {self.points.shape}")
-        print(f"Number of features: {self.points.shape[1]}")
-        print(f"Number of samples: {len(self.points)}")
+        print(f"XYZ shape: {self.xyz.shape}")  # e.g., (N, 3)
+        print(f"Features shape: {self.features.shape}")  # e.g., (N, F)
+        print(f"Labels shape: {self.labels.shape}")  # e.g., (N,)
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
-        # Get point features and label
-        point_features = self.points[idx]
-        label = self.labels[idx]
-        
-        # Convert to tensor with shape [num_features]
-        features = torch.tensor(point_features, dtype=torch.float32)
-        
-        # Ensure shape is [num_features, 1] (each point as a column)
-        features = features.unsqueeze(0)  # Adds a batch dimension
+        # Extract xyz, features, and label for a given index
+        xyz = torch.tensor(self.xyz[idx], dtype=torch.float32)  # Shape: [3]
+        features = torch.tensor(self.features[idx], dtype=torch.float32)  # Shape: [F]
+        label = torch.tensor(self.labels[idx], dtype=torch.long)  # Shape: scalar
 
-        label = torch.tensor(label, dtype=torch.long)
-        
-        return features, label
+        # Reshape xyz and features for PointNet++
+        xyz = xyz.unsqueeze(0)  # Shape: [3, 1]
+        features = features.unsqueeze(-1)  # Shape: [F, 1]
+
+        return features, xyz, label
 
 
 # === Model Setup ===
 def create_model(in_dim, num_classes):
-    # Verify input dimension
     print(f"Creating model with input dimension: {in_dim}")
     stn_3d = STN(in_dim=in_dim, out_nd=3)
     model = PointNetCls(in_dim=in_dim, out_dim=num_classes, stn_3d=stn_3d)
     return model
+
 
 # === Training Loop ===
 def train_model(model, data_loader, optimizer, criterion, epochs, device):
@@ -58,23 +57,22 @@ def train_model(model, data_loader, optimizer, criterion, epochs, device):
     
     for epoch in range(epochs):
         total_loss = 0
-        for features, labels in data_loader:
-            # Debug input shapes
+        for features, xyz, labels in data_loader:
             print(f"Features shape: {features.shape}")
+            print(f"XYZ shape: {xyz.shape}")
             print(f"Labels shape: {labels.shape}")
-            
-            # Ensure features are on the correct device
-            features = features.to(device)
-            labels = labels.to(device)
+
+            features, xyz, labels = features.to(device), xyz.to(device), labels.to(device)
 
             optimizer.zero_grad()
-            logits = model(features)
+            logits = model(features, xyz)
             loss = criterion(logits, labels)
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
 
         print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss / len(data_loader)}")
+
 
 # === Main Function ===
 if __name__ == "__main__":
@@ -84,35 +82,49 @@ if __name__ == "__main__":
 
     # === Dataset and DataLoader ===
     batch_size = 16
-    
+
     # First, inspect the data
     sample_data = np.loadtxt(train_file, skiprows=1)
     print("Sample data shape:", sample_data.shape)
     print("Sample data first row:", sample_data[0])
-    
-    # Dynamically determine input dimension
-    in_dim = sample_data.shape[1] - 1  # Subtract 1 for the label column
-    num_classes = len(np.unique(sample_data[:, -1]))
-    
-    print(f"Detected input dimension: {in_dim}")
-    print(f"Detected number of classes: {num_classes}")
 
+    # Dynamically determine input dimension
     train_dataset = PointCloudDataset(train_file)
     val_dataset = PointCloudDataset(val_file)
 
+    in_dim = train_dataset.features.shape[1]  # Number of features
+    num_classes = len(np.unique(train_dataset.labels))  # Number of classes
+
+    print(f"Detected input dimension: {in_dim}")
+    print(f"Detected number of classes: {num_classes}")
+
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+    # === Inspect a batch from DataLoader ===
+    for batch_features, batch_xyz, batch_labels in train_loader:
+        print(f"Batch Features shape: {batch_features.shape}")  # [Batch size, F, 1]
+        print(f"Batch XYZ shape: {batch_xyz.shape}")            # [Batch size, 3, 1]
+        print(f"Batch Labels shape: {batch_labels.shape}")      # [Batch size]
+        break
 
     # === Check GPU Availability ===
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print("Using device:", device)
 
-    # Create model with dynamically determined dimensions
-    model = create_model(in_dim, num_classes)
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-    criterion = nn.CrossEntropyLoss()
+    # === Initialize Model ===
+    model = PointNet2ClsSSG(in_dim=in_dim, out_dim=num_classes)
+
+    # Test model with a batch
+    for batch_features, batch_xyz, batch_labels in train_loader:
+        output = model(batch_features, batch_xyz)  # Pass features and xyz to model
+        print(f"Model output shape: {output.shape}")  # Expected: [Batch size, num_classes]
+        break
 
     # === Training ===
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    criterion = nn.CrossEntropyLoss()
     epochs = 10
+
     print("Starting training...")
     train_model(model, train_loader, optimizer, criterion, epochs, device)
