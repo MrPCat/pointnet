@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from pointnet_ import PointNetCls, STN
-from pointnet_ import PointNet2ClsSSG  # Replace with your actual file/module name
+from pointnet_ import PointNet2ClsSSG 
 
 # === Dataset Class ===
 class PointCloudDataset(Dataset):
@@ -41,18 +41,6 @@ class PointCloudDataset(Dataset):
 
         return features, xyz, label
 
-
-    def __getitem__(self, idx):
-        # Extract xyz, features, and label for a given index
-        xyz = torch.tensor(self.xyz[idx], dtype=torch.float32)  # Shape: [3]
-        features = torch.tensor(self.features[idx], dtype=torch.float32)  # Shape: [F]
-        label = torch.tensor(self.labels[idx], dtype=torch.long)  # Shape: scalar
-
-        # Reshape xyz and features for PointNet++
-        xyz = xyz.unsqueeze(0)  # Shape: [3, 1]
-        features = features.unsqueeze(-1)  # Shape: [F, 1]
-
-        return features, xyz, label
 
 
 # === Model Setup ===
@@ -129,7 +117,7 @@ if __name__ == "__main__":
     in_dim=in_dim,
     out_dim=num_classes,
     downsample_points=downsample_points)
-    
+
     # === Initialize Model ===
     model = PointNet2ClsSSG(in_dim=in_dim, out_dim=num_classes)
 
