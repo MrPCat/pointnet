@@ -129,8 +129,8 @@ def load_model(path, model, optimizer=None):
 # === Main Function ===
 if __name__ == "__main__":
     # === Specify File Paths ===
-    train_file = r"C:\Farshid\Uni\Semesters\Thesis\Data\Epoch_March2018\LiDAR\Mar18_train.txt"  # Replace with the actual path to your train file
-    val_file = r"C:\Farshid\Uni\Semesters\Thesis\Data\Epoch_March2018\LiDAR\Mar18_val.txt"      # Replace with the actual path to your validation file
+    train_file = r"/content/drive/MyDrive/t1/Mar18_train.txt"  # Replace with the actual path to your train file
+    val_file = r"/content/drive/MyDrive/t1/Mar18_val.txt"      # Replace with the actual path to your validation file
 
     # === Dataset and DataLoader ===
     batch_size = 16
@@ -149,7 +149,7 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss()
 
     # === Check for Existing Model ===
-    checkpoint_path = "model_checkpoint.pth"
+    checkpoint_path = "/content/drive/MyDrive/t1/model_checkpoint.pth"
     start_epoch = 0
     if os.path.exists(checkpoint_path):
         start_epoch = load_model(checkpoint_path, model, optimizer)
