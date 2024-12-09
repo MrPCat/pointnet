@@ -32,21 +32,16 @@ class PointCloudDataset(Dataset):
         point_features = self.points[idx]
         label = self.labels[idx]
         
-        # Convert to tensor with shape [num_features, num_points]
-        # Ensure 10 features
+        # Convert to tensor with shape [num_features]
         features = torch.tensor(point_features, dtype=torch.float32)
         
-        # Reshape to [num_channels, num_points]
-        # If features is 1D, add a dimension
-        if features.dim() == 1:
-            features = features.unsqueeze(1)
-        
-        # Transpose to match PointNet expected input
-        features = features.t()
-        
+        # Ensure shape is [num_features, 1] (each point as a column)
+        features = features.unsqueeze(0)  # Adds a batch dimension
+
         label = torch.tensor(label, dtype=torch.long)
         
         return features, label
+
 
 # === Model Setup ===
 def create_model(in_dim, num_classes):
