@@ -11,7 +11,7 @@ from pointnet_ import PointNet2ClsSSG  # Replace with your actual file/module na
 class PointCloudDataset(Dataset):
     def __init__(self, file_path):
         # Load the entire dataset
-        self.data = np.loadtxt(file_path, delimiter=',', skiprows=1)
+        self.data = np.loadtxt(file_path, delimiter='\t', skiprows=1)
 
         # Split into xyz, features, and labels
         self.xyz = self.data[:, :3]  # First 3 columns are X, Y, Z
