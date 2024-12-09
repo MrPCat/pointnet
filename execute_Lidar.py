@@ -104,13 +104,13 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
         train_loss = total_loss / len(train_loader)
         val_loss, val_accuracy = validate_model(model, val_loader, criterion, device)
 
-        log_and_print(f"Epoch {epoch+1}/{epochs}, Train Loss: {train_loss:.4f}, "
-                      f"Validation Loss: {val_loss:.4f}, Validation Accuracy: {val_accuracy:.2f}%")
-
         # Save model after each epoch
         epoch_model_path = os.path.join(save_dir, f"pointnet_epoch_{epoch+1}.pth")
         torch.save(model.state_dict(), epoch_model_path)
         log_and_print(f"Model checkpoint saved to {epoch_model_path}")
+
+        log_and_print(f"Epoch {epoch+1}/{epochs}, Train Loss: {train_loss:.4f}, "
+                      f"Validation Loss: {val_loss:.4f}, Validation Accuracy: {val_accuracy:.2f}%")
 
 
 #Testin and evaluating the model 
