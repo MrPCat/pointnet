@@ -1,71 +1,66 @@
-import torch
 import numpy as np
-from torch.utils.data import DataLoader, Dataset
+import torch
+from torch.utils.data import Dataset, DataLoader
 from pointnet_ import PointNet2ClsSSG
 
-# Define the test dataset class
+
 class TestDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024):
-        self.data = np.loadtxt(file_path, delimiter='\t', skiprows=1)
+        # Load data from the test file
+        self.data = np.loadtxt(file_path, delimiter='\t', skiprows=0)  # Adjust based on the file delimiter
 
-        self.xyz = self.data[:, :3]  # XYZ coordinates
-        self.features = self.data[:, 3:]  # Features (excluding XYZ)
+        self.xyz = self.data[:, :3]  # Columns X, Y, Z
+        self.features = self.data[:, 3:]  # Remaining columns (R, G, B, Reflectance, etc.)
 
-        # If no additional features are present, add a dummy feature
-        if self.features.shape[1] == 0:
-            self.features = np.ones((len(self.xyz), 1))  # Dummy feature
-
-        # Normalize XYZ
+        # Normalize spatial coordinates
         self.xyz -= np.mean(self.xyz, axis=0)
 
+        # Ensure the number of points is divisible by `points_per_cloud`
         self.points_per_cloud = points_per_cloud
-
-        # Pad dataset to make it divisible by points_per_cloud
         total_points = len(self.xyz)
-        excess_points = total_points % self.points_per_cloud
+        excess_points = total_points % points_per_cloud
         if excess_points != 0:
-            pad_size = self.points_per_cloud - excess_points
-            self.xyz = np.vstack([self.xyz, self.xyz[-pad_size:]])  # Pad with last points
-            self.features = np.vstack([self.features, self.features[-pad_size:]])
+            pad_size = points_per_cloud - excess_points
+            self.xyz = np.vstack([self.xyz, self.xyz[:pad_size]])  # Pad with duplicates
+            self.features = np.vstack([self.features, self.features[:pad_size]])
 
-        self.num_clouds = len(self.xyz) // self.points_per_cloud
+        self.num_clouds = len(self.xyz) // points_per_cloud
 
     def __len__(self):
         return self.num_clouds
 
     def __getitem__(self, idx):
+        # Extract the points for the current cloud
         start = idx * self.points_per_cloud
         end = start + self.points_per_cloud
-
         xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32).T  # Shape: [3, points_per_cloud]
         features = torch.tensor(self.features[start:end], dtype=torch.float32).T  # Shape: [F, points_per_cloud]
-
         return features, xyz
+# File paths
+test_file = "/path/to/your/test_file.txt"  # Replace with your actual test file path
+model_path = "/path/to/your/model_checkpoint.pth"  # Replace with your model path
+output_file = "/path/to/output/predictions.txt"  # Where predictions will be saved
 
-
-# Load the test dataset
-test_file = "/content/drive/MyDrive/t1/Mar18_test.txt"
+# Dataset and DataLoader
 test_dataset = TestDataset(test_file, points_per_cloud=1024)
 test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
 
-# Load the trained model
+# Load the model
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-model = PointNet2ClsSSG(in_dim=6, out_dim=11, downsample_points=(512, 128))
-model.load_state_dict(torch.load("/content/drive/MyDrive/t1/pointnet_model.pth"))
+model = PointNet2ClsSSG(in_dim=9, out_dim=11, downsample_points=(512, 128))  # in_dim=9 for X, Y, Z, and features
+model.load_state_dict(torch.load(model_path))
 model.to(device)
 model.eval()
 
-# Perform inference
+# Inference
 predictions = []
-
 with torch.no_grad():
     for features, xyz in test_loader:
         features, xyz = features.to(device), xyz.to(device)
         logits = model(features, xyz)
-        preds = torch.argmax(logits, dim=1)  # Predicted classes
+        preds = torch.argmax(logits, dim=1)  # Predicted class indices
         predictions.extend(preds.cpu().numpy())
 
-# Save predictions to a file
-np.savetxt("/content/drive/MyDrive/t1/predictions.txt", predictions, fmt="%d")
-print("Predictions saved to predictions.txt")
+# Save predictions
+np.savetxt(output_file, predictions, fmt="%d")
+print(f"Predictions saved to {output_file}")
