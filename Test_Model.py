@@ -33,7 +33,7 @@ class TestDataset(Dataset):
         return features, xyz
 
 # Initialize the Test Dataset
-test_file = "/path/to/your/test/file.txt"  # Update with the correct path
+test_file = "/content/drive/MyDrive/t1/Mar18_test.txt"  # Update with the correct path
 test_dataset = TestDataset(test_file, points_per_cloud=1024)
 
 # Dynamically set in_dim based on dataset
@@ -43,7 +43,7 @@ in_dim = test_dataset.in_dim  # Includes XYZ + other features
 model = PointNet2ClsSSG(in_dim=in_dim, out_dim=11, downsample_points=(512, 128))
 
 # Load the Pretrained Model
-model_path = "/path/to/your/model.pth"  # Update with the correct model path
+model_path = "/content/drive/MyDrive/t1/pointnet_model.pth"  # Update with the correct model path
 model.load_state_dict(torch.load(model_path))
 
 # Move Model to Device
@@ -64,5 +64,5 @@ with torch.no_grad():
         predictions.extend(preds.cpu().numpy())
 
 # Save Predictions
-np.savetxt("/path/to/save/predictions.txt", predictions, fmt="%d")
+np.savetxt("/content/drive/MyDrive/t1/Mar18_test_predicted.txt", predictions, fmt="%d")
 print("Predictions saved to predictions.txt")
