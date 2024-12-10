@@ -1,30 +1,42 @@
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
-from pointnet_ import PointNet2ClsSSG  # Replace with your actual model import
 
 class MatchFeaturesDataset(Dataset):
     def __init__(self, train_file_path, test_file_path, points_per_cloud=1024):
-        # Load the training dataset
-        train_data = np.loadtxt(train_file_path, delimiter='\t', skiprows=1)
-        
-        # Extract the training feature names (excluding the label column)
-        train_feature_names = ['X', 'Y', 'Z', 'R', 'G', 'B', 'Reflectance', 'NumberOfReturns', 'ReturnNumber']
-        
-        # Load the test dataset
-        test_data = np.loadtxt(test_file_path, delimiter='\t', skiprows=1)
-        
-        # Identify test feature names
-        all_test_features = ['X', 'Y', 'Z', 'R', 'G', 'B', 'Reflectance', 'NumberOfReturns', 'ReturnNumber']
-        
+        # Extract the header from the training file
+        with open(train_file_path, 'r') as f:
+            train_header = f.readline().strip()
+        train_feature_names = train_header.split('\t')[:-1]  # Exclude the label column
+
+        # Extract the header from the test file
+        with open(test_file_path, 'r') as f:
+            test_header = f.readline().strip()
+        test_feature_names = test_header.split('\t')
+
         # Dynamically match features
-        self.matched_feature_indices = [all_test_features.index(feature) for feature in train_feature_names if feature in all_test_features]
-        print(f"Matched Features: {[train_feature_names[i] for i in self.matched_feature_indices]}")
-        
-        # Extract XYZ and matched features from test data
+        self.matched_feature_indices = [
+            test_feature_names.index(feature) for feature in train_feature_names if feature in test_feature_names
+        ]
+        print(f"Matched Features: {train_feature_names}")
+
+        # Load numerical data from the test file
+        test_data = []
+        with open(test_file_path, 'r') as f:
+            for line in f:
+                try:
+                    # Attempt to parse the line as a tab-separated list of floats
+                    test_data.append([float(value) for value in line.strip().split('\t')])
+                except ValueError:
+                    # Skip the line if it cannot be parsed as numerical data
+                    continue
+
+        test_data = np.array(test_data)
+
+        # Extract XYZ and matched features
         self.xyz = test_data[:, :3]  # Always include X, Y, Z
         self.features = test_data[:, self.matched_feature_indices]  # Only include matched features
-        
+
         # Normalize spatial coordinates
         self.xyz -= np.mean(self.xyz, axis=0)
 
@@ -46,6 +58,7 @@ class MatchFeaturesDataset(Dataset):
         xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32).T  # Shape: [3, points_per_cloud]
         features = torch.tensor(self.features[start:end], dtype=torch.float32).T  # Shape: [F, points_per_cloud]
         return features, xyz
+
 
 def predict_classes(model, test_loader, device, output_path):
     model.eval()
