@@ -1,7 +1,7 @@
 #Test the model 
 import torch
 import numpy as np
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from pointnet_ import PointNet2ClsSSG
 
 # Load Test Dataset (without labels)
