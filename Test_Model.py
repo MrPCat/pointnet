@@ -4,12 +4,12 @@ from torch.utils.data import Dataset, DataLoader
 
 class MatchFeaturesDataset(Dataset):
     def __init__(self, train_file_path, test_file_path, points_per_cloud=1024):
-        # Extract the header from the training file
+        # Read the header from the training file
         with open(train_file_path, 'r') as f:
-            train_header = f.readline().strip()
-        train_feature_names = train_header.split('\t')[:-1]  # Exclude the label column
+            header = f.readline().strip()
+        train_feature_names = header.split('\t')[:-1]  # Exclude the label column
 
-        # Extract the header from the test file
+        # Load the test file
         with open(test_file_path, 'r') as f:
             test_header = f.readline().strip()
         test_feature_names = test_header.split('\t')
@@ -20,20 +20,10 @@ class MatchFeaturesDataset(Dataset):
         ]
         print(f"Matched Features: {train_feature_names}")
 
-        # Load numerical data from the test file
-        test_data = []
-        with open(test_file_path, 'r') as f:
-            for line in f:
-                try:
-                    # Attempt to parse the line as a tab-separated list of floats
-                    test_data.append([float(value) for value in line.strip().split('\t')])
-                except ValueError:
-                    # Skip the line if it cannot be parsed as numerical data
-                    continue
+        # Load the numerical data (skip header row)
+        test_data = np.loadtxt(test_file_path, delimiter='\t', skiprows=1)
 
-        test_data = np.array(test_data)
-
-        # Extract XYZ and matched features
+        # Extract XYZ and matched features from test data
         self.xyz = test_data[:, :3]  # Always include X, Y, Z
         self.features = test_data[:, self.matched_feature_indices]  # Only include matched features
 
@@ -59,42 +49,42 @@ class MatchFeaturesDataset(Dataset):
         features = torch.tensor(self.features[start:end], dtype=torch.float32).T  # Shape: [F, points_per_cloud]
         return features, xyz
 
+# Example usage for prediction
+if __name__ == "__main__":
+    import torch
+    from torch.utils.data import DataLoader
+    from pointnet2 import PointNet2ClsSSG
 
-def predict_classes(model, test_loader, device, output_path):
+    # File paths
+    train_file = '/path/to/train_data.txt'
+    test_file = '/path/to/test_data.txt'
+    model_path = '/path/to/trained_model.pth'
+    output_file = '/path/to/output_with_predictions.txt'
+
+    # Create the dataset
+    test_dataset = MatchFeaturesDataset(train_file, test_file, points_per_cloud=1024)
+
+    # DataLoader
+    test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
+
+    # Load model
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = PointNet2ClsSSG(in_dim=test_dataset.features.shape[1], out_dim=5)  # Adjust `out_dim` as per your classes
+    model.load_state_dict(torch.load(model_path))
+    model.to(device)
     model.eval()
-    predictions = []
 
+    # Predict and save
+    all_predictions = []
     with torch.no_grad():
         for features, xyz in test_loader:
             features, xyz = features.to(device), xyz.to(device)
             logits = model(features, xyz)
-            predicted_classes = torch.argmax(logits, dim=1).cpu().numpy()
-            predictions.extend(predicted_classes)
+            predictions = torch.argmax(logits, dim=1)
+            all_predictions.extend(predictions.cpu().numpy())
 
-    # Save predictions to a new file
-    np.savetxt(output_path, np.array(predictions), fmt='%d', header='Classification', comments='')
-    print(f"Predictions saved to {output_path}")
-
-if __name__ == "__main__":
-    # File paths
-    train_file = '/content/drive/MyDrive/t1/training_logs.txt'
-    test_file = '/path/to/test_data.txt'
-    model_path = '/content/drive/MyDrive/t1/pointnet_model.pth'
-    output_file = '/content/drive/MyDrive/t1/predictions.txt'
-
-    # GPU/CPU device configuration
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    # Dataset and DataLoader
-    test_dataset = MatchFeaturesDataset(train_file, test_file, points_per_cloud=1024)
-    test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
-
-    # Model
-    in_dim = len(test_dataset.matched_feature_indices)  # Dynamically determine input feature dimension
-    num_classes = 11 # Adjust to the number of classes in your training
-    model = PointNet2ClsSSG(in_dim=in_dim, out_dim=num_classes, downsample_points=(512, 128))
-    model.load_state_dict(torch.load(model_path))
-    model.to(device)
-
-    # Predict and save classes
-    predict_classes(model, test_loader, device, output_file)
+    # Add predictions to dataset
+    augmented_data = np.hstack([test_dataset.xyz, test_dataset.features, np.array(all_predictions).reshape(-1, 1)])
+    np.savetxt(output_file, augmented_data, delimiter='\t', fmt='%0.8f',
+               header='X\tY\tZ\tR\tG\tB\tReflectance\tNumberOfReturns\tReturnNumber\tClassification', comments='')
+    print(f"Predictions saved to {output_file}")
