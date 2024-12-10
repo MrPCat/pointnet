@@ -32,6 +32,13 @@ class PointCloudDataset(Dataset):
         
         if debug:
             self.print_debug_info()
+    def print_debug_info(self):
+        print("\n--- Dataset Debugging Information ---")
+        print(f"Total Points: {len(self.xyz)}")
+        print(f"Points per Cloud: {self.points_per_cloud}")
+        print(f"Number of Point Clouds: {self.num_clouds}")
+        print(f"XYZ Shape: {self.xyz.shape}")
+        print(f"Features Shape: {self.features.shape}")
 
     def __getitem__(self, idx):
         start = idx * self.points_per_cloud
