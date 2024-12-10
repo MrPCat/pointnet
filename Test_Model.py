@@ -28,15 +28,9 @@ class MatchFeaturesDataset(Dataset):
         # Load test data and extract matched features
         test_data = pd.read_csv(test_file_path, delimiter='\t').values
         self.xyz = test_data[:, :3]
-        # Remove XYZ from matched features
         non_xyz_features = [f for f in matched_features if f not in ['//X', 'Y', 'Z']]
-
-        # Extract only the non-XYZ matched features
         self.features = test_data[:, [test_cols.index(f) for f in non_xyz_features]]
-
-        # Store non-XYZ matched feature names for debugging
         self.matched_features = non_xyz_features
-
 
         # Normalize spatial coordinates
         self.xyz -= np.mean(self.xyz, axis=0)
@@ -44,7 +38,7 @@ class MatchFeaturesDataset(Dataset):
         # Handle points per cloud
         self.points_per_cloud = points_per_cloud
         self.num_clouds = len(self.xyz) // self.points_per_cloud
-        
+
         if len(self.xyz) % self.points_per_cloud != 0:
             print(f"Warning: {len(self.xyz)} points not divisible by {self.points_per_cloud}")
             self.xyz = self.xyz[:self.num_clouds * self.points_per_cloud]
@@ -71,7 +65,12 @@ class MatchFeaturesDataset(Dataset):
         end = start + self.points_per_cloud
         xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32).T  # Shape: [3, points_per_cloud]
         features = torch.tensor(self.features[start:end], dtype=torch.float32).T  # Shape: [F, points_per_cloud]
+
+        # Ensure xyz values are valid
+        if torch.isnan(xyz).any() or torch.isinf(xyz).any():
+            raise ValueError(f"Invalid values in xyz: {xyz}")
         return features, xyz
+
 
 def load_model_safely(model_path, input_dim, out_dim, matched_features):
     model = PointNet2ClsSSG(in_dim=input_dim, out_dim=out_dim)
@@ -98,6 +97,16 @@ def load_model_safely(model_path, input_dim, out_dim, matched_features):
         print(f"Error loading model: {e}. Initializing model from scratch.")
     return model
 
+
+def validate_xyz_downsampling(xyz):
+    """Validate xyz tensor before downsampling."""
+    if torch.isnan(xyz).any() or torch.isinf(xyz).any():
+        raise ValueError("Invalid values in xyz tensor.")
+    if xyz.shape[1] == 0:
+        raise ValueError("xyz tensor has no points.")
+    print(f"Validated xyz: Shape {xyz.shape}, Range [{xyz.min()}, {xyz.max()}]")
+
+
 if __name__ == "__main__":
     # File paths
     train_file = '/content/drive/MyDrive/t1/Mar18_train.txt'
@@ -121,6 +130,7 @@ if __name__ == "__main__":
     all_predictions = []
     with torch.no_grad():
         for features, xyz in test_loader:
+            validate_xyz_downsampling(xyz)
             features, xyz = features.to('cuda'), xyz.to('cuda')
             logits = model(features, xyz)
             predictions = torch.argmax(logits, dim=1)
