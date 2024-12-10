@@ -42,6 +42,20 @@ def farthest_point_sampling(x: torch.Tensor, n_sample: int, start_idx: int = Non
     return sel_idx
 
 
+# def ball_query_pytorch(src, query, radius, k):
+#     # src: (b, n, 3)
+#     # query: (b, m, 3)
+#     b, n = src.shape[:2]
+#     m = query.shape[1]
+#     dists = torch.cdist(query, src)  # (b, m, n)
+#     idx = repeat(torch.arange(n, device=src.device), 'n -> b m n', b=b, m=m)
+#     idx = torch.where(dists > radius, n, idx)
+#     idx = idx.sort(dim=-1).values[:, :, :k]  # (b, m, k)
+#     idx = torch.where(idx == n, idx[:, :, [0]], idx)
+#     _dists = dists.gather(-1, idx)  # (b, m, k)
+#     return idx, _dists
+
+#My Debug modification one 
 def ball_query_pytorch(src, query, radius, k):
     """
     Ball query in PyTorch: Finds the indices of the nearest neighbors within a given radius.
