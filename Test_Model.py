@@ -1,6 +1,9 @@
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
+import torch
+from torch.utils.data import DataLoader
+from pointnet_ import PointNet2ClsSSG
 
 class MatchFeaturesDataset(Dataset):
     def __init__(self, train_file_path, test_file_path, points_per_cloud=1024):
@@ -51,15 +54,13 @@ class MatchFeaturesDataset(Dataset):
 
 # Example usage for prediction
 if __name__ == "__main__":
-    import torch
-    from torch.utils.data import DataLoader
-    from pointnet2 import PointNet2ClsSSG
+    
 
     # File paths
-    train_file = '/path/to/train_data.txt'
+    train_file = '/content/drive/MyDrive/t1/training.txt'
     test_file = '/path/to/test_data.txt'
-    model_path = '/path/to/trained_model.pth'
-    output_file = '/path/to/output_with_predictions.txt'
+    model_path = '/content/drive/MyDrive/t1/pointnet_model.pth'
+    output_file = '/content/drive/MyDrive/t1/predictions.txt'
 
     # Create the dataset
     test_dataset = MatchFeaturesDataset(train_file, test_file, points_per_cloud=1024)
