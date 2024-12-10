@@ -37,9 +37,9 @@ class TestDataset(Dataset):
         features = torch.tensor(self.features[start:end], dtype=torch.float32).T  # Shape: [F, points_per_cloud]
         return features, xyz
 # File paths
-test_file = "/path/to/your/test_file.txt"  # Replace with your actual test file path
-model_path = "/path/to/your/model_checkpoint.pth"  # Replace with your model path
-output_file = "/path/to/output/predictions.txt"  # Where predictions will be saved
+test_file = "/content/drive/MyDrive/t1/Mar18_test.txt"  # Replace with your actual test file path
+model_path = "/content/drive/MyDrive/t1/pointnet_model.pth"  # Replace with your model path
+output_file = "/content/drive/MyDrive/t1/predictions.txt"  # Where predictions will be saved
 
 # Dataset and DataLoader
 test_dataset = TestDataset(test_file, points_per_cloud=1024)
