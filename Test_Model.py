@@ -15,34 +15,36 @@ class PointCloudDataset(Dataset):
         
         # Normalize XYZ
         self.xyz -= np.mean(self.xyz, axis=0)
-
-        # Handle points per cloud
+        
+        # Ensure data is divisible by points_per_cloud
         self.points_per_cloud = points_per_cloud
         self.num_clouds = len(self.xyz) // self.points_per_cloud
+        
+        # Truncate or pad to ensure exact division
         if len(self.xyz) % self.points_per_cloud != 0:
-            print(f"Warning: {len(self.xyz)} points not divisible by {self.points_per_cloud}. Truncating excess.")
+            # Option 1: Truncate
             self.xyz = self.xyz[:self.num_clouds * self.points_per_cloud]
             self.features = self.features[:self.num_clouds * self.points_per_cloud]
+            
+            # Alternatively, Option 2: Pad with zeros or repeat last points
+            # self.xyz = np.pad(self.xyz, ((0, self.points_per_cloud - (len(self.xyz) % self.points_per_cloud)), (0, 0)), mode='constant')
+            # self.features = np.pad(self.features, ((0, self.points_per_cloud - (len(self.features) % self.points_per_cloud)), (0, 0)), mode='constant')
         
         if debug:
             self.print_debug_info()
 
-    def print_debug_info(self):
-        print("\n--- Dataset Debugging Information ---")
-        print(f"Total Points: {len(self.xyz)}")
-        print(f"Points per Cloud: {self.points_per_cloud}")
-        print(f"Number of Point Clouds: {self.num_clouds}")
-        print(f"XYZ Shape: {self.xyz.shape}")
-        print(f"Features Shape: {self.features.shape}")
-
-    def __len__(self):
-        return self.num_clouds
-
     def __getitem__(self, idx):
         start = idx * self.points_per_cloud
         end = start + self.points_per_cloud
-        xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32).T  # Shape: [3, points_per_cloud]
-        features = torch.tensor(self.features[start:end], dtype=torch.float32).T  # Shape: [F, points_per_cloud]
+        
+        # Ensure correct tensor shapes
+        xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32)  # [points_per_cloud, 3]
+        features = torch.tensor(self.features[start:end], dtype=torch.float32)  # [points_per_cloud, feature_dim]
+        
+        # Transpose to match PointNet2 expected input
+        xyz = xyz.transpose(0, 1)  # [3, points_per_cloud]
+        features = features.transpose(0, 1)  # [feature_dim, points_per_cloud]
+        
         return features, xyz
 
 
@@ -74,16 +76,29 @@ if __name__ == "__main__":
     model.eval()
 
     # DataLoader
+    print("CUDA Available:", torch.cuda.is_available())
+    
     test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
 
-    # Prediction
     all_predictions = []
     with torch.no_grad():
         for features, xyz in test_loader:
+            # Debug prints
+            print("Features shape:", features.shape)
+            print("XYZ shape:", xyz.shape)
+            print("Features dtype:", features.dtype)
+            print("XYZ dtype:", xyz.dtype)
+            
             features, xyz = features.to('cuda'), xyz.to('cuda')
-            logits = model(features, xyz)
-            predictions = torch.argmax(logits, dim=1)
-            all_predictions.extend(predictions.cpu().numpy())
+            
+            try:
+                logits = model(features, xyz)
+                predictions = torch.argmax(logits, dim=1)
+                all_predictions.extend(predictions.cpu().numpy())
+            except RuntimeError as e:
+                print(f"Error during inference: {e}")
+                # Add more detailed error handling or debugging here
+                raise
 
     # Save predictions
     augmented_data = np.hstack([test_dataset.xyz, test_dataset.features, np.array(all_predictions).reshape(-1, 1)])
