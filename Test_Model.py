@@ -7,8 +7,9 @@ from pointnet_ import PointNet2ClsSSG
 class TestDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024):
         # Load data from the test file
-        self.data = np.loadtxt(file_path, delimiter='\t', skiprows=0)  # Adjust based on the file delimiter
+        self.data = np.loadtxt(file_path, delimiter='\t', skiprows=1)  # Adjust based on the file delimiter
 
+        n
         self.xyz = self.data[:, :3]  # Columns X, Y, Z
         self.features = self.data[:, 3:]  # Remaining columns (R, G, B, Reflectance, etc.)
 
