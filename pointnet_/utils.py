@@ -43,14 +43,47 @@ def farthest_point_sampling(x: torch.Tensor, n_sample: int, start_idx: int = Non
 
 
 def ball_query_pytorch(src, query, radius, k):
+    """
+    Ball query in PyTorch: Finds the indices of the nearest neighbors within a given radius.
+
+    Args:
+        src: Source points of shape (b, n, 3).
+        query: Query points of shape (b, m, 3).
+        radius: Radius within which neighbors are considered.
+        k: Maximum number of neighbors to find.
+
+    Returns:
+        idx: Indices of the neighbors (b, m, k).
+        _dists: Distances to the neighbors (b, m, k).
+    """
     # src: (b, n, 3)
     # query: (b, m, 3)
     b, n = src.shape[:2]
     m = query.shape[1]
+
+    # Compute pairwise distances
     dists = torch.cdist(query, src)  # (b, m, n)
+
+    # Create index array
     idx = repeat(torch.arange(n, device=src.device), 'n -> b m n', b=b, m=m)
+
+    # Mask distances greater than radius
     idx = torch.where(dists > radius, n, idx)
+
+    # Sort indices by distance and select the top-k neighbors
     idx = idx.sort(dim=-1).values[:, :, :k]  # (b, m, k)
-    idx = torch.where(idx == n, idx[:, :, [0]], idx)
+
+    # Handle case where fewer than k neighbors are found
+    idx = torch.where(idx == n, idx[:, :, [0]], idx)  # Fallback to the first index if no valid neighbors
+
+    # Validate index bounds
+    idx = torch.clamp(idx, min=0, max=n - 1)
+
+    # Debugging: Ensure indices are within valid range
+    assert (idx >= 0).all() and (idx < n).all(), "Index out of bounds in ball_query_pytorch"
+
+    # Gather distances for the selected indices
     _dists = dists.gather(-1, idx)  # (b, m, k)
+
     return idx, _dists
+
