@@ -1,58 +1,53 @@
-import unittest
+#Test the model 
 import torch
-import taichi as ti
-from pointnet_ import PointNet2ClsSSG, PointNet2ClsMSG, PointNet2SegMSG, PointNet2SegSSG, PointNet2PartSegSSG, \
-    PointNet2PartSegMSG
+import numpy as np
+from torch.utils.data import DataLoader
+from pointnet_ import PointNet2ClsSSG
 
-ti.init(ti.cuda)
+# Load Test Dataset (without labels)
+class TestDataset(Dataset):
+    def __init__(self, file_path, points_per_cloud=1024):
+        self.data = np.loadtxt(file_path, delimiter='\t', skiprows=1)
 
+        self.xyz = self.data[:, :3]  # XYZ coordinates
+        self.features = self.data[:, 3:]  # Features (no labels in test)
 
-class Test(unittest.TestCase):
+        self.xyz -= np.mean(self.xyz, axis=0)  # Normalize spatial coordinates
 
-    def test_pointnet2_cls_ssg(self):
-        x = torch.randn(2, 3, 1024).cuda()
-        xyz = x.clone()
-        model = PointNet2ClsSSG(3, 40).cuda()
-        out = model(x, xyz)
-        assert out.shape == (2, 40)
+        self.points_per_cloud = points_per_cloud
+        self.num_clouds = len(self.xyz) // self.points_per_cloud
 
-    def test_pointnet2_cls_msg(self):
-        x = torch.randn(2, 3, 1024).cuda()
-        xyz = x.clone()
-        model = PointNet2ClsMSG(3, 40).cuda()
-        out = model(x, xyz)
-        assert out.shape == (2, 40)
+    def __len__(self):
+        return self.num_clouds
 
-    def test_pointnet2_seg_ssg(self):
-        x = torch.randn(2, 3, 1024).cuda()
-        xyz = x.clone()
-        model = PointNet2SegSSG(3, 40).cuda()
-        out = model(x, xyz)
-        assert out.shape == (2, 40, 1024)
+    def __getitem__(self, idx):
+        start = idx * self.points_per_cloud
+        end = start + self.points_per_cloud
+        xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32).T  # Shape: [3, points_per_cloud]
+        features = torch.tensor(self.features[start:end], dtype=torch.float32).T  # Shape: [F, points_per_cloud]
+        return features, xyz
 
-    def test_pointnet2_seg_msg(self):
-        x = torch.randn(2, 3, 1024).cuda()
-        xyz = x.clone()
-        model = PointNet2SegMSG(3, 40).cuda()
-        out = model(x, xyz)
-        assert out.shape == (2, 40, 1024)
+# Load the test dataset
+test_file = '/content/drive/MyDrive/t1/Mar18_test.txt'
+test_dataset = TestDataset(test_file, points_per_cloud=1024)
+test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
 
-    def test_pointnet2_part_seg_ssg(self):
-        x = torch.randn(2, 3, 1024).cuda()
-        xyz = x.clone()
-        category = torch.randint(0, 10, (2,)).cuda()
-        model = PointNet2PartSegSSG(3, 40).cuda()
-        out = model(x, xyz, category)
-        assert out.shape == (2, 40, 1024)
+# Load the trained model
+model = PointNet2ClsSSG(in_dim=6, out_dim=11, downsample_points=(512, 128))
+model.load_state_dict(torch.load("/content/drive/MyDrive/t1/pointnet_model.pth"))
+model.eval()
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+model.to(device)
 
-    def test_pointnet2_part_seg_msg(self):
-        x = torch.randn(2, 3, 1024).cuda()
-        xyz = x.clone()
-        category = torch.randint(0, 10, (2,)).cuda()
-        model = PointNet2PartSegMSG(3, 40).cuda()
-        out = model(x, xyz, category)
-        assert out.shape == (2, 40, 1024)
+# Perform inference
+predictions = []
+with torch.no_grad():
+    for features, xyz in test_loader:
+        features, xyz = features.to(device), xyz.to(device)
+        logits = model(features, xyz)
+        preds = torch.argmax(logits, dim=1)  # Get the predicted classes
+        predictions.extend(preds.cpu().numpy())
 
-
-if __name__ == '__main__':
-    unittest.main()
+# Save predictions to a file
+np.savetxt("predictions.txt", predictions, fmt="%d")
+print("Predictions saved to predictions.txt")
