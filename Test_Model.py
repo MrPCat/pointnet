@@ -3,34 +3,61 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from pointnet_ import PointNet2ClsSSG  # Assuming your model is imported here
 
-# Define the Test Dataset
-class TestDataset(Dataset):
-    def __init__(self, file_path, points_per_cloud=1024):
-        # Dynamically determine the number of features
-        self.data = np.loadtxt(file_path, delimiter='\t', skiprows=1)
-        self.xyz = self.data[:, :3]  # XYZ coordinates
-        self.features = self.data[:, 3:]  # All features beyond XYZ
-        self.xyz -= np.mean(self.xyz, axis=0)  # Normalize spatial coordinates
+import numpy as np
+import torch
+from torch.utils.data import Dataset
 
+class DynamicFeatureDataset(Dataset):
+    def __init__(self, file_path, features_to_match, points_per_cloud=1024):
+        # Load the dataset
+        self.data = np.loadtxt(file_path, delimiter='\t', skiprows=1)
+        
+        # Define all possible features (assuming columns are known)
+        all_feature_names = ['X', 'Y', 'Z', 'R', 'G', 'B', 'Reflectance', 'NumberOfReturns', 'ReturnNumber']
+        feature_indices = {name: idx for idx, name in enumerate(all_feature_names)}
+
+        # Determine which features are available in the current file
+        current_feature_names = features_to_match  # Pass in the training features
+
+        # Match features
+        self.matched_features = [name for name in all_feature_names if name in current_feature_names]
+        self.feature_indices = [feature_indices[name] for name in self.matched_features]
+        
+        # Extract XYZ, matched features, and labels (if available)
+        self.xyz = self.data[:, :3]  # Always include XYZ
+        self.features = self.data[:, self.feature_indices]
+        self.labels = self.data[:, -1] if self.data.shape[1] > max(self.feature_indices) + 1 else None
+
+        # Normalize spatial coordinates
+        self.xyz -= np.mean(self.xyz, axis=0)
+
+        # Handle points_per_cloud
         self.points_per_cloud = points_per_cloud
         self.num_clouds = len(self.xyz) // self.points_per_cloud
-
         if len(self.xyz) % self.points_per_cloud != 0:
             print("Warning: Dataset points not divisible by points_per_cloud. Truncating extra points.")
             self.xyz = self.xyz[:self.num_clouds * self.points_per_cloud]
             self.features = self.features[:self.num_clouds * self.points_per_cloud]
-
-        self.in_dim = self.features.shape[1] + 3  # Dynamically set input dimensions
+            if self.labels is not None:
+                self.labels = self.labels[:self.num_clouds * self.points_per_cloud]
 
     def __len__(self):
         return self.num_clouds
 
     def __getitem__(self, idx):
+        # Get a subset of points for the current cloud
         start = idx * self.points_per_cloud
         end = start + self.points_per_cloud
         xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32).T  # Shape: [3, points_per_cloud]
         features = torch.tensor(self.features[start:end], dtype=torch.float32).T  # Shape: [F, points_per_cloud]
-        return features, xyz
+        
+        if self.labels is not None:
+            labels = torch.tensor(self.labels[start:end], dtype=torch.long)  # Shape: [points_per_cloud]
+            label = torch.mode(labels).values  # Use the most common label as the cloud's label
+            return features, xyz, label
+        else:
+            return features, xyz
+
 
 # Initialize the Test Dataset
 test_file = "/content/drive/MyDrive/t1/Mar18_test.txt"  # Update with the correct path
