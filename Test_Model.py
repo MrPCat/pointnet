@@ -49,5 +49,5 @@ with torch.no_grad():
         predictions.extend(preds.cpu().numpy())
 
 # Save predictions to a file
-np.savetxt("predictions.txt", predictions, fmt="%d")
+np.savetxt("/content/drive/MyDrive/t1/predictions.txt", predictions, fmt="%d")
 print("Predictions saved to predictions.txt")
