@@ -61,7 +61,7 @@ def load_model(model_path, input_dim, output_dim):
 if __name__ == "__main__":
     # File paths
     test_file = '/content/drive/MyDrive/t1/Mar18_test.txt'
-    model_path = '/content/drive/MyDrive/t1/pointnet_model.pth'
+    model_path = '/content/drive/MyDrive/t1/checkpoints/pointnet_model.pth'
     output_file = '/content/drive/MyDrive/t1/predictions.txt'
 
     # Load the test dataset
