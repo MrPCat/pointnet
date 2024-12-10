@@ -28,7 +28,7 @@ class TestDataset(Dataset):
         return features, xyz
 
 # Load the test dataset
-test_file = '/content/drive/MyDrive/t1/Mar18_test.txt'
+test_file = "/content/drive/MyDrive/t1/Mar18_test.txt"
 test_dataset = TestDataset(test_file, points_per_cloud=1024)
 test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
 
