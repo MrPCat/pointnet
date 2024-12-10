@@ -19,10 +19,16 @@ class TestDataset(Dataset):
         self.xyz -= np.mean(self.xyz, axis=0)
 
         self.points_per_cloud = points_per_cloud
-        self.num_clouds = len(self.xyz) // self.points_per_cloud
 
-        assert len(self.xyz) % self.points_per_cloud == 0, \
-            "Dataset points not divisible by points_per_cloud."
+        # Pad dataset to make it divisible by points_per_cloud
+        total_points = len(self.xyz)
+        excess_points = total_points % self.points_per_cloud
+        if excess_points != 0:
+            pad_size = self.points_per_cloud - excess_points
+            self.xyz = np.vstack([self.xyz, self.xyz[-pad_size:]])  # Pad with last points
+            self.features = np.vstack([self.features, self.features[-pad_size:]])
+
+        self.num_clouds = len(self.xyz) // self.points_per_cloud
 
     def __len__(self):
         return self.num_clouds
@@ -35,6 +41,7 @@ class TestDataset(Dataset):
         features = torch.tensor(self.features[start:end], dtype=torch.float32).T  # Shape: [F, points_per_cloud]
 
         return features, xyz
+
 
 # Load the test dataset
 test_file = "/content/drive/MyDrive/t1/Mar18_test.txt"
