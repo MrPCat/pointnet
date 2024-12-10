@@ -1,26 +1,30 @@
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
-import os
-from pointnet_ import PointNet2ClsSSG  # Replace with your PointNet model import
+from pointnet_ import PointNet2ClsSSG  # Replace with your actual model import
 
-class DynamicFeatureDataset(Dataset):
-    def __init__(self, file_path, features_to_match, points_per_cloud=1024):
-        # Load the dataset
-        self.data = np.loadtxt(file_path, delimiter='\t', skiprows=1)
+class MatchFeaturesDataset(Dataset):
+    def __init__(self, train_file_path, test_file_path, points_per_cloud=1024):
+        # Load the training dataset
+        train_data = np.loadtxt(train_file_path, delimiter='\t', skiprows=1)
         
-        # Define all possible features (assuming columns are known)
-        all_feature_names = ['X', 'Y', 'Z', 'R', 'G', 'B', 'Reflectance', 'NumberOfReturns', 'ReturnNumber']
-        feature_indices = {name: idx for idx, name in enumerate(all_feature_names)}
-
-        # Match features
-        self.matched_features = [name for name in all_feature_names if name in features_to_match]
-        self.feature_indices = [feature_indices[name] for name in self.matched_features]
+        # Extract the training feature names (excluding the label column)
+        train_feature_names = ['X', 'Y', 'Z', 'R', 'G', 'B', 'Reflectance', 'NumberOfReturns', 'ReturnNumber']
         
-        # Extract XYZ, matched features
-        self.xyz = self.data[:, :3]  # Always include XYZ
-        self.features = self.data[:, self.feature_indices]
-
+        # Load the test dataset
+        test_data = np.loadtxt(test_file_path, delimiter='\t', skiprows=1)
+        
+        # Identify test feature names
+        all_test_features = ['X', 'Y', 'Z', 'R', 'G', 'B', 'Reflectance', 'NumberOfReturns', 'ReturnNumber']
+        
+        # Dynamically match features
+        self.matched_feature_indices = [all_test_features.index(feature) for feature in train_feature_names if feature in all_test_features]
+        print(f"Matched Features: {[train_feature_names[i] for i in self.matched_feature_indices]}")
+        
+        # Extract XYZ and matched features from test data
+        self.xyz = test_data[:, :3]  # Always include X, Y, Z
+        self.features = test_data[:, self.matched_feature_indices]  # Only include matched features
+        
         # Normalize spatial coordinates
         self.xyz -= np.mean(self.xyz, axis=0)
 
@@ -43,49 +47,41 @@ class DynamicFeatureDataset(Dataset):
         features = torch.tensor(self.features[start:end], dtype=torch.float32).T  # Shape: [F, points_per_cloud]
         return features, xyz
 
-def predict_classes(model, test_file, features_to_match, points_per_cloud, output_path, batch_size=16):
-    # Load the test dataset
-    test_dataset = DynamicFeatureDataset(test_file, features_to_match, points_per_cloud)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-
-    # Device configuration
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model.to(device)
+def predict_classes(model, test_loader, device, output_path):
     model.eval()
-
     predictions = []
 
     with torch.no_grad():
         for features, xyz in test_loader:
             features, xyz = features.to(device), xyz.to(device)
             logits = model(features, xyz)
-            predicted = torch.argmax(logits, dim=1)
-            predictions.append(predicted.cpu().numpy())
+            predicted_classes = torch.argmax(logits, dim=1).cpu().numpy()
+            predictions.extend(predicted_classes)
 
-    predictions = np.concatenate(predictions)
-    dataset_with_predictions = np.hstack((test_dataset.data, predictions.reshape(-1, 1)))
+    # Save predictions to a new file
+    np.savetxt(output_path, np.array(predictions), fmt='%d', header='Classification', comments='')
+    print(f"Predictions saved to {output_path}")
 
-    # Save the augmented dataset to a new file
-    np.savetxt(output_path, dataset_with_predictions, delimiter='\t', fmt='%0.8f',
-               header='X\tY\tZ\tR\tG\tB\tReflectance\tNumberOfReturns\tReturnNumber\tClassification', comments='')
-    print(f"Augmented dataset saved to {output_path}")
-
-# Example Usage
 if __name__ == "__main__":
-    # Define paths
-    test_file = '/content/drive/MyDrive/t1/Mar18_test.txt'
+    # File paths
+    train_file = '/content/drive/MyDrive/t1/training_logs.txt'
+    test_file = '/path/to/test_data.txt'
     model_path = '/content/drive/MyDrive/t1/pointnet_model.pth'
-    output_file = '/content/drive/MyDrive/t1/output_file.txt'
+    output_file = '/content/drive/MyDrive/t1/predictions.txt'
 
-    # Define feature matching (must match features used during training)
-    features_to_match = ['X', 'Y', 'Z', 'R', 'G', 'B', 'Reflectance', 'NumberOfReturns', 'ReturnNumber']
+    # GPU/CPU device configuration
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # Load the model
-    in_dim = len(features_to_match)  # Dynamically determine input dimension
-    out_dim = 5  # Set the number of classes based on your training setup
-    model = PointNet2ClsSSG(in_dim=in_dim, out_dim=out_dim, downsample_points=(512, 128))
+    # Dataset and DataLoader
+    test_dataset = MatchFeaturesDataset(train_file, test_file, points_per_cloud=1024)
+    test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
+
+    # Model
+    in_dim = len(test_dataset.matched_feature_indices)  # Dynamically determine input feature dimension
+    num_classes = 11 # Adjust to the number of classes in your training
+    model = PointNet2ClsSSG(in_dim=in_dim, out_dim=num_classes, downsample_points=(512, 128))
     model.load_state_dict(torch.load(model_path))
-    print("Model loaded successfully.")
+    model.to(device)
 
-    # Predict classes
-    predict_classes(model, test_file, features_to_match, points_per_cloud=1024, output_path=output_file)
+    # Predict and save classes
+    predict_classes(model, test_loader, device, output_file)
