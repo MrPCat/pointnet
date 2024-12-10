@@ -1,49 +1,29 @@
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
-from pointnet_ import PointNet2ClsSSG
+from pointnet_ import PointNet2ClsSSG  
 import pandas as pd
 
-class MatchFeaturesDataset(Dataset):
-    def __init__(self, train_file_path, test_file_path, points_per_cloud=1024, debug=True):
-        # Read the headers and identify features
-        train_cols = pd.read_csv(train_file_path, delimiter='\t', nrows=0).columns.tolist()
-        test_cols = pd.read_csv(test_file_path, delimiter='\t', nrows=0).columns.tolist()
-
-        # Exclude classification column if present in training data
-        if 'Classification' in train_cols:
-            train_cols = train_cols[:-1]
-
-        # Match features
-        matched_features = [col for col in train_cols if col in test_cols]
-        unmatched_train = [col for col in train_cols if col not in test_cols]
-        unmatched_test = [col for col in test_cols if col not in train_cols]
-
-        if debug:
-            print("\n--- Feature Matching ---")
-            print(f"Matched Features: {matched_features}")
-            print(f"Unmatched Train Features: {unmatched_train}")
-            print(f"Unmatched Test Features: {unmatched_test}")
-
-        # Load test data and extract matched features
-        test_data = pd.read_csv(test_file_path, delimiter='\t').values
-        self.xyz = test_data[:, :3]
-        non_xyz_features = [f for f in matched_features if f not in ['//X', 'Y', 'Z']]
-        self.features = test_data[:, [test_cols.index(f) for f in non_xyz_features]]
-        self.matched_features = non_xyz_features
-
-        # Normalize spatial coordinates
+class PointCloudDataset(Dataset):
+    def __init__(self, file_path, points_per_cloud=1024, debug=True):
+        # Load the dataset
+        data = pd.read_csv(file_path, delimiter='\t').values
+        
+        # Extract XYZ and Features (excluding XYZ columns explicitly)
+        self.xyz = data[:, :3]  # Assuming the first three columns are always XYZ
+        self.features = data[:, 3:]  # Starting from the fourth column onwards
+        
+        # Normalize XYZ
         self.xyz -= np.mean(self.xyz, axis=0)
 
         # Handle points per cloud
         self.points_per_cloud = points_per_cloud
         self.num_clouds = len(self.xyz) // self.points_per_cloud
-
         if len(self.xyz) % self.points_per_cloud != 0:
-            print(f"Warning: {len(self.xyz)} points not divisible by {self.points_per_cloud}")
+            print(f"Warning: {len(self.xyz)} points not divisible by {self.points_per_cloud}. Truncating excess.")
             self.xyz = self.xyz[:self.num_clouds * self.points_per_cloud]
             self.features = self.features[:self.num_clouds * self.points_per_cloud]
-
+        
         if debug:
             self.print_debug_info()
 
@@ -52,8 +32,6 @@ class MatchFeaturesDataset(Dataset):
         print(f"Total Points: {len(self.xyz)}")
         print(f"Points per Cloud: {self.points_per_cloud}")
         print(f"Number of Point Clouds: {self.num_clouds}")
-        print("\nFeature Matching:")
-        print(f"Matched Features: {self.matched_features}")
         print(f"XYZ Shape: {self.xyz.shape}")
         print(f"Features Shape: {self.features.shape}")
 
@@ -65,61 +43,33 @@ class MatchFeaturesDataset(Dataset):
         end = start + self.points_per_cloud
         xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32).T  # Shape: [3, points_per_cloud]
         features = torch.tensor(self.features[start:end], dtype=torch.float32).T  # Shape: [F, points_per_cloud]
-
-        # Ensure xyz values are valid
-        if torch.isnan(xyz).any() or torch.isinf(xyz).any():
-            raise ValueError(f"Invalid values in xyz: {xyz}")
         return features, xyz
 
 
-def load_model_safely(model_path, input_dim, out_dim, matched_features):
-    model = PointNet2ClsSSG(in_dim=input_dim, out_dim=out_dim)
+
+def load_model(model_path, input_dim, output_dim):
+    model = PointNet2ClsSSG(in_dim=input_dim, out_dim=output_dim)
     try:
-        # Load checkpoint
         state_dict = torch.load(model_path, map_location='cpu')
-
-        print("\n--- Checkpoint Debug Information ---")
-        for name, param in state_dict.items():
-            if 'sa1.conv_blocks.0.0.0.weight' in name:
-                checkpoint_dim = param.shape[1]
-                print(f"Checkpoint Feature Dimension: {checkpoint_dim}")
-                print(f"Checkpoint Features: {matched_features[:checkpoint_dim]}")
-        for name, param in model.state_dict().items():
-            if 'sa1.conv_blocks.0.0.0.weight' in name:
-                model_dim = param.shape[1]
-                print(f"Current Model Feature Dimension: {model_dim}")
-                print(f"Current Model Features: {matched_features[:model_dim]}")
-
-        # Load state dict
         model.load_state_dict(state_dict, strict=False)
-        print("Model loaded successfully with adjusted dimensions")
+        print("Model loaded successfully.")
     except Exception as e:
         print(f"Error loading model: {e}. Initializing model from scratch.")
     return model
 
 
-def validate_xyz_downsampling(xyz):
-    """Validate xyz tensor before downsampling."""
-    if torch.isnan(xyz).any() or torch.isinf(xyz).any():
-        raise ValueError("Invalid values in xyz tensor.")
-    if xyz.shape[1] == 0:
-        raise ValueError("xyz tensor has no points.")
-    print(f"Validated xyz: Shape {xyz.shape}, Range [{xyz.min()}, {xyz.max()}]")
-
-
 if __name__ == "__main__":
     # File paths
-    train_file = '/content/drive/MyDrive/t1/Mar18_train.txt'
     test_file = '/content/drive/MyDrive/t1/Mar18_test.txt'
     model_path = '/content/drive/MyDrive/t1/pointnet_model.pth'
     output_file = '/content/drive/MyDrive/t1/predictions.txt'
 
-    # Load dataset
-    test_dataset = MatchFeaturesDataset(train_file, test_file, points_per_cloud=1024, debug=True)
+    # Load the test dataset
+    test_dataset = PointCloudDataset(test_file, points_per_cloud=1024, debug=True)
 
-    # Load model
+    # Load the model
     input_dim = test_dataset.features.shape[1]
-    model = load_model_safely(model_path, input_dim, out_dim=11, matched_features=test_dataset.matched_features)
+    model = load_model(model_path, input_dim=input_dim, output_dim=11)  # Adjust `output_dim` based on your classes
     model.to('cuda' if torch.cuda.is_available() else 'cpu')
     model.eval()
 
@@ -130,7 +80,6 @@ if __name__ == "__main__":
     all_predictions = []
     with torch.no_grad():
         for features, xyz in test_loader:
-            validate_xyz_downsampling(xyz)
             features, xyz = features.to('cuda'), xyz.to('cuda')
             logits = model(features, xyz)
             predictions = torch.argmax(logits, dim=1)
