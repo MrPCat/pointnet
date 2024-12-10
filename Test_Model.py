@@ -22,7 +22,10 @@ class TestDataset(Dataset):
         self.points_per_cloud = points_per_cloud
         self.num_clouds = len(self.xyz) // self.points_per_cloud
 
-        assert len(self.xyz) % self.points_per_cloud == 0, "Dataset points not divisible by points_per_cloud."
+        # Truncate to make divisible
+        total_points = self.num_clouds * self.points_per_cloud
+        self.xyz = self.xyz[:total_points]
+        self.features = self.features[:total_points]
 
     def __len__(self):
         return self.num_clouds
@@ -33,6 +36,7 @@ class TestDataset(Dataset):
         xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32).T  # Shape: [3, points_per_cloud]
         features = torch.tensor(self.features[start:end], dtype=torch.float32).T  # Shape: [F, points_per_cloud]
         return features, xyz
+
 
 # Load the test dataset
 test_file = "/content/drive/MyDrive/t1/Mar18_test.txt"
