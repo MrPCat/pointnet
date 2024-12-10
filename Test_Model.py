@@ -8,6 +8,10 @@ from pointnet_ import PointNet2ClsSSG
 # Enable CUDA Error Debugging
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
+# Check for GPU Availability
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(f"Using device: {device}")
+
 # Load Test Dataset (without labels)
 class TestDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024):
@@ -57,19 +61,17 @@ test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
 # Load the trained model
 model = PointNet2ClsSSG(in_dim=6, out_dim=11, downsample_points=(512, 128))
 model.load_state_dict(torch.load("/content/drive/MyDrive/t1/pointnet_model.pth"))
+model.to(device)  # Move the model to GPU
 model.eval()
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model.to(device)
 
 # Perform inference
 predictions = []
 with torch.no_grad():
     for features, xyz in test_loader:
-        print(f"Features shape: {features.shape}, XYZ shape: {xyz.shape}")  # Debugging output
-        features, xyz = features.to(device), xyz.to(device)
-        logits = model(features, xyz)
+        features, xyz = features.to(device), xyz.to(device)  # Move data to GPU
+        logits = model(features, xyz)  # Forward pass on GPU
         preds = torch.argmax(logits, dim=1)  # Get the predicted classes
-        predictions.extend(preds.cpu().numpy())
+        predictions.extend(preds.cpu().numpy())  # Move predictions back to CPU for saving
 
 # Save predictions to a file
 np.savetxt("/content/drive/MyDrive/t1/predictions.txt", predictions, fmt="%d")
