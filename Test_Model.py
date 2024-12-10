@@ -73,9 +73,9 @@ def predict_classes(model, test_file, features_to_match, points_per_cloud, outpu
 # Example Usage
 if __name__ == "__main__":
     # Define paths
-    test_file = '/path/to/test_file.txt'
-    model_path = '/path/to/saved_model.pth'
-    output_file = '/path/to/output_file.txt'
+    test_file = '/content/drive/MyDrive/t1/Mar18_test.txt'
+    model_path = '/content/drive/MyDrive/t1/pointnet_model.pth'
+    output_file = '/content/drive/MyDrive/t1/output_file.txt'
 
     # Define feature matching (must match features used during training)
     features_to_match = ['X', 'Y', 'Z', 'R', 'G', 'B', 'Reflectance', 'NumberOfReturns', 'ReturnNumber']
