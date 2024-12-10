@@ -57,7 +57,7 @@ if __name__ == "__main__":
     
 
     # File paths
-    train_file = '/content/drive/MyDrive/t1/training.txt'
+    train_file = '/content/drive/MyDrive/t1/Mar18_train.txt'
     test_file = '/content/drive/MyDrive/t1/Mar18_test.txt'
     model_path = '/content/drive/MyDrive/t1/pointnet_model.pth'
     output_file = '/content/drive/MyDrive/t1/predictions.txt'
