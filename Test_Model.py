@@ -29,6 +29,7 @@ class MatchFeaturesDataset(Dataset):
         test_data = pd.read_csv(test_file_path, delimiter='\t').values
         self.xyz = test_data[:, :3]
         self.features = test_data[:, [test_cols.index(f) for f in matched_features]]
+        self.matched_features = matched_features  # Store matched feature names for later use
 
         # Normalize spatial coordinates
         self.xyz -= np.mean(self.xyz, axis=0)
@@ -36,19 +37,24 @@ class MatchFeaturesDataset(Dataset):
         # Handle points per cloud
         self.points_per_cloud = points_per_cloud
         self.num_clouds = len(self.xyz) // self.points_per_cloud
-
+        
         if len(self.xyz) % self.points_per_cloud != 0:
             print(f"Warning: {len(self.xyz)} points not divisible by {self.points_per_cloud}")
             self.xyz = self.xyz[:self.num_clouds * self.points_per_cloud]
             self.features = self.features[:self.num_clouds * self.points_per_cloud]
 
         if debug:
-            print("\n--- Dataset Information ---")
-            print(f"Total Points: {len(self.xyz)}")
-            print(f"Points per Cloud: {self.points_per_cloud}")
-            print(f"Number of Point Clouds: {self.num_clouds}")
-            print(f"XYZ Shape: {self.xyz.shape}")
-            print(f"Features Shape: {self.features.shape}")
+            self.print_debug_info()
+
+    def print_debug_info(self):
+        print("\n--- Dataset Debugging Information ---")
+        print(f"Total Points: {len(self.xyz)}")
+        print(f"Points per Cloud: {self.points_per_cloud}")
+        print(f"Number of Point Clouds: {self.num_clouds}")
+        print("\nFeature Matching:")
+        print(f"Matched Features: {self.matched_features}")
+        print(f"XYZ Shape: {self.xyz.shape}")
+        print(f"Features Shape: {self.features.shape}")
 
     def __len__(self):
         return self.num_clouds
@@ -60,16 +66,25 @@ class MatchFeaturesDataset(Dataset):
         features = torch.tensor(self.features[start:end], dtype=torch.float32).T  # Shape: [F, points_per_cloud]
         return features, xyz
 
-def load_model_safely(model_path, input_dim, out_dim):
+def load_model_safely(model_path, input_dim, out_dim, matched_features):
     model = PointNet2ClsSSG(in_dim=input_dim, out_dim=out_dim)
     try:
+        # Load checkpoint
         state_dict = torch.load(model_path, map_location='cpu')
+
+        print("\n--- Checkpoint Debug Information ---")
         for name, param in state_dict.items():
             if 'sa1.conv_blocks.0.0.0.weight' in name:
-                print(f"Checkpoint Dimension for {name}: {param.shape[1]}")
+                checkpoint_dim = param.shape[1]
+                print(f"Checkpoint Feature Dimension: {checkpoint_dim}")
+                print(f"Checkpoint Features: {matched_features[:checkpoint_dim]}")
         for name, param in model.state_dict().items():
             if 'sa1.conv_blocks.0.0.0.weight' in name:
-                print(f"Current Model Dimension for {name}: {param.shape[1]}")
+                model_dim = param.shape[1]
+                print(f"Current Model Feature Dimension: {model_dim}")
+                print(f"Current Model Features: {matched_features[:model_dim]}")
+
+        # Load state dict
         model.load_state_dict(state_dict, strict=False)
         print("Model loaded successfully with adjusted dimensions")
     except Exception as e:
@@ -88,7 +103,7 @@ if __name__ == "__main__":
 
     # Load model
     input_dim = test_dataset.features.shape[1]
-    model = load_model_safely(model_path, input_dim, out_dim=11)
+    model = load_model_safely(model_path, input_dim, out_dim=11, matched_features=test_dataset.matched_features)
     model.to('cuda' if torch.cuda.is_available() else 'cpu')
     model.eval()
 
