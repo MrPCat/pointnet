@@ -28,8 +28,15 @@ class MatchFeaturesDataset(Dataset):
         # Load test data and extract matched features
         test_data = pd.read_csv(test_file_path, delimiter='\t').values
         self.xyz = test_data[:, :3]
-        self.features = test_data[:, [test_cols.index(f) for f in matched_features]]
-        self.matched_features = matched_features  # Store matched feature names for later use
+        # Remove XYZ from matched features
+        non_xyz_features = [f for f in matched_features if f not in ['//X', 'Y', 'Z']]
+
+        # Extract only the non-XYZ matched features
+        self.features = test_data[:, [test_cols.index(f) for f in non_xyz_features]]
+
+        # Store non-XYZ matched feature names for debugging
+        self.matched_features = non_xyz_features
+
 
         # Normalize spatial coordinates
         self.xyz -= np.mean(self.xyz, axis=0)
