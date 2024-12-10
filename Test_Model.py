@@ -1,57 +1,58 @@
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
-from pointnet_ import PointNet2ClsSSG
+from pointnet_ import PointNet2ClsSSG  # Assuming your model is imported here
 
-
+# Define the Test Dataset
 class TestDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024):
-        # Load data from the test file
-        self.data = np.loadtxt(file_path, delimiter='\t', skiprows=1)  # Adjust based on the file delimiter
+        # Dynamically determine the number of features
+        self.data = np.loadtxt(file_path, delimiter='\t', skiprows=1)
+        self.xyz = self.data[:, :3]  # XYZ coordinates
+        self.features = self.data[:, 3:]  # All features beyond XYZ
+        self.xyz -= np.mean(self.xyz, axis=0)  # Normalize spatial coordinates
 
-        
-        self.xyz = self.data[:, :3]  # Columns X, Y, Z
-        self.features = self.data[:, 3:]  # Remaining columns (R, G, B, Reflectance, etc.)
-
-        # Normalize spatial coordinates
-        self.xyz -= np.mean(self.xyz, axis=0)
-
-        # Ensure the number of points is divisible by `points_per_cloud`
         self.points_per_cloud = points_per_cloud
-        total_points = len(self.xyz)
-        excess_points = total_points % points_per_cloud
-        if excess_points != 0:
-            pad_size = points_per_cloud - excess_points
-            self.xyz = np.vstack([self.xyz, self.xyz[:pad_size]])  # Pad with duplicates
-            self.features = np.vstack([self.features, self.features[:pad_size]])
+        self.num_clouds = len(self.xyz) // self.points_per_cloud
 
-        self.num_clouds = len(self.xyz) // points_per_cloud
+        if len(self.xyz) % self.points_per_cloud != 0:
+            print("Warning: Dataset points not divisible by points_per_cloud. Truncating extra points.")
+            self.xyz = self.xyz[:self.num_clouds * self.points_per_cloud]
+            self.features = self.features[:self.num_clouds * self.points_per_cloud]
+
+        self.in_dim = self.features.shape[1] + 3  # Dynamically set input dimensions
 
     def __len__(self):
         return self.num_clouds
 
     def __getitem__(self, idx):
-        # Extract the points for the current cloud
         start = idx * self.points_per_cloud
         end = start + self.points_per_cloud
         xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32).T  # Shape: [3, points_per_cloud]
         features = torch.tensor(self.features[start:end], dtype=torch.float32).T  # Shape: [F, points_per_cloud]
         return features, xyz
-# File paths
-test_file = "/content/drive/MyDrive/t1/Mar18_test.txt"  # Replace with your actual test file path
-model_path = "/content/drive/MyDrive/t1/pointnet_model.pth"  # Replace with your model path
-output_file = "/content/drive/MyDrive/t1/predictions.txt"  # Where predictions will be saved
 
-# Dataset and DataLoader
+# Initialize the Test Dataset
+test_file = "/path/to/your/test/file.txt"  # Update with the correct path
 test_dataset = TestDataset(test_file, points_per_cloud=1024)
-test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
 
-# Load the model
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = PointNet2ClsSSG(in_dim=9, out_dim=11, downsample_points=(512, 128))  # in_dim=9 for X, Y, Z, and features
+# Dynamically set in_dim based on dataset
+in_dim = test_dataset.in_dim  # Includes XYZ + other features
+
+# Initialize Model
+model = PointNet2ClsSSG(in_dim=in_dim, out_dim=11, downsample_points=(512, 128))
+
+# Load the Pretrained Model
+model_path = "/path/to/your/model.pth"  # Update with the correct model path
 model.load_state_dict(torch.load(model_path))
+
+# Move Model to Device
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.to(device)
 model.eval()
+
+# DataLoader
+test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
 
 # Inference
 predictions = []
@@ -59,9 +60,9 @@ with torch.no_grad():
     for features, xyz in test_loader:
         features, xyz = features.to(device), xyz.to(device)
         logits = model(features, xyz)
-        preds = torch.argmax(logits, dim=1)  # Predicted class indices
+        preds = torch.argmax(logits, dim=1)
         predictions.extend(preds.cpu().numpy())
 
-# Save predictions
-np.savetxt(output_file, predictions, fmt="%d")
-print(f"Predictions saved to {output_file}")
+# Save Predictions
+np.savetxt("/path/to/save/predictions.txt", predictions, fmt="%d")
+print("Predictions saved to predictions.txt")
