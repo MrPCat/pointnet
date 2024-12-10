@@ -39,6 +39,10 @@ class PointCloudDataset(Dataset):
         print(f"Number of Point Clouds: {self.num_clouds}")
         print(f"XYZ Shape: {self.xyz.shape}")
         print(f"Features Shape: {self.features.shape}")
+    
+    def __len__(self):
+        # Return the number of point clouds
+        return self.num_clouds
 
     def __getitem__(self, idx):
         start = idx * self.points_per_cloud
