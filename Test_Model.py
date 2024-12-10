@@ -9,7 +9,7 @@ class TestDataset(Dataset):
         # Load data from the test file
         self.data = np.loadtxt(file_path, delimiter='\t', skiprows=1)  # Adjust based on the file delimiter
 
-        n
+        
         self.xyz = self.data[:, :3]  # Columns X, Y, Z
         self.features = self.data[:, 3:]  # Remaining columns (R, G, B, Reflectance, etc.)
 
