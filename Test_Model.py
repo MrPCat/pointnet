@@ -93,9 +93,8 @@ class MatchFeaturesDataset(Dataset):
     def __getitem__(self, idx):
         start = idx * self.points_per_cloud
         end = start + self.points_per_cloud
-        xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32).T
-        features = torch.tensor(self.features[start:end], dtype=torch.float32).T
-        return features, xyz.tensor(self.features[start:end], dtype=torch.float32).T  # Shape: [F, points_per_cloud]
+        xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32).T  # Shape: [3, points_per_cloud]
+        features = torch.tensor(self.features[start:end], dtype=torch.float32).T  # Shape: [F, points_per_cloud]
         return features, xyz
 
 # Example usage for prediction
