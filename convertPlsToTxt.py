@@ -75,7 +75,7 @@ def load_las_file(file_path):
 
 # Main driver function
 def main():
-    file_path = "/path/to/your/file.las"  # Replace with your LAS file path
+    file_path = "/content/drive/MyDrive/t1/Mar18_test_GroundTruth.las"  # Replace with your LAS file path
     try:
         las_file = load_las_file(file_path)
         if las_file:
