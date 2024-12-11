@@ -1,53 +1,46 @@
+import os
+file_path = "/content/drive/MyDrive/t1/Mar18_test_GroundTruth.las"
+if os.path.exists(file_path):
+    print("File exists.")
+else:
+    print("File not found.")
 import laspy
 import pandas as pd
-import numpy as np
 
 def convert_las_to_filtered_csv(las_file_path, output_file_path, remove_zero_columns=True):
-    """
-    Converts a .las file to a tab-separated text file and removes zero-filled columns if specified.
-
-    Parameters:
-    las_file_path (str): Path to the input .las file.
-    output_file_path (str): Path to the output file (.txt or .csv).
-    remove_zero_columns (bool): Whether to remove columns filled with zeros.
-    """
-    # Open the LAS file
-    print(f"Reading LAS file: {las_file_path}")
-    las = laspy.read(las_file_path)
+    try:
+        # Read the LAS file
+        las = laspy.read(las_file_path)
+        print(f"File version: {las.header.version}")
+        print(f"Number of points: {len(las.points)}")
+        
+        # Collect point data
+        points_data = {
+            "X": las.x,
+            "Y": las.y,
+            "Z": las.z
+        }
+        
+        # Include additional attributes
+        for dim in las.point_format.dimension_names:
+            if dim not in ["X", "Y", "Z"]:
+                points_data[dim] = las[dim]
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(points_data)
+        
+        # Optionally remove zero-filled columns
+        if remove_zero_columns:
+            df = df.loc[:, (df != 0).any(axis=0)]
+        
+        # Save as tab-separated text file
+        df.to_csv(output_file_path, sep="\t", index=False)
+        print(f"Conversion successful. Saved to {output_file_path}")
     
-    # Collect point data
-    print("Extracting point properties...")
-    points_data = {}
+    except Exception as e:
+        print(f"Error during conversion: {e}")
 
-    # Add core properties (X, Y, Z)
-    points_data["X"] = las.x
-    points_data["Y"] = las.y
-    points_data["Z"] = las.z
-
-    # Extract additional attributes dynamically
-    for dimension in las.point_format.dimension_names:
-        if dimension not in ["X", "Y", "Z"]:  # Avoid duplicating XYZ
-            points_data[dimension] = las[dimension]
-
-    # Convert to DataFrame
-    print("Converting to DataFrame...")
-    df = pd.DataFrame(points_data)
-
-    if remove_zero_columns:
-        print("Removing zero-filled columns...")
-        # Remove columns where all values are zero
-        non_zero_columns = df.loc[:, (df != 0).any(axis=0)]
-        print(f"Removed {len(df.columns) - len(non_zero_columns.columns)} zero-filled columns.")
-        df = non_zero_columns
-
-    # Save to tab-separated text file
-    print(f"Saving to file: {output_file_path}")
-    df.to_csv(output_file_path, sep="\t", index=False, float_format="%.8f")
-
-    print("Conversion complete.")
-
-# Example usage
-if __name__ == "__main__":
-    input_las_file = "/path/to/your/input_file.las"  # Replace with the actual path
-    output_txt_file = "/path/to/your/output_file.txt"  # Replace with the desired output path
-    convert_las_to_filtered_csv(input_las_file, output_txt_file, remove_zero_columns=True)
+convert_las_to_filtered_csv(
+    "/content/drive/MyDrive/t1/Mar18_test_GroundTruth.las",
+    "/content/drive/MyDrive/t1/Mar18_test_GroundTruth.txt"
+)
