@@ -1,39 +1,90 @@
+import laspy
 import os
 
-def load_ground_truth(file_path):
+def inspect_file(file_path):
     """
-    Load ground truth data from a valid LAS file or a misnamed text file.
+    Inspect the file to determine if it is a valid LAS file, has a text header, or is corrupted.
     """
     try:
-        # Check file signature for binary LAS file
-        if file_path.lower().endswith(".las"):
-            with open(file_path, "rb") as f:
-                file_signature = f.read(4).decode(errors="ignore")
-                if file_signature == "LASF":
-                    print("Valid LAS binary file detected.")
-                    las = laspy.read(file_path)
-                    ground_truth_data = pd.DataFrame({
-                        "x": las.x,
-                        "y": las.y,
-                        "z": las.z,
-                        "ground_truth_label": las.Classification
-                    })
-                    print("Successfully loaded LAS file.")
-                    return ground_truth_data
-                else:
-                    print("File has .las extension but is not a binary LAS file. Attempting as text file.")
+        with open(file_path, "rb") as f:
+            file_signature = f.read(4)
         
-        # Treat as text file if signature is not valid
-        ground_truth_data = pd.read_csv(file_path, delimiter="\t")
-        if {'X', 'Y', 'Z', 'ground_truth_label'}.issubset(ground_truth_data.columns):
-            ground_truth_data.rename(columns={"X": "x", "Y": "y", "Z": "z"}, inplace=True)
+        if file_signature == b'LASF':
+            print("[INFO] File is a valid LAS binary file. Signature detected: LASF.")
+            return "las_binary"
+        elif b'\t' in file_signature or file_signature.decode(errors="ignore").startswith("X"):
+            print("[WARNING] File has a text-like header. Signature detected: Text header.")
+            return "text_with_header"
         else:
-            raise ValueError("Text file does not contain required columns.")
-        print("Successfully loaded text file.")
-        return ground_truth_data
-    except laspy.errors.LaspyException as e:
-        print(f"Error reading LAS file: {e}")
-        raise
+            print("[ERROR] File signature does not match LAS or text header standards.")
+            return "unknown_format"
     except Exception as e:
-        print(f"Error loading file: {e}")
+        print(f"[ERROR] Failed to inspect file: {e}")
+        return "error"
+
+def strip_text_header(file_path, temp_file_path):
+    """
+    Removes any text-based headers from a LAS file and saves the binary content to a new file.
+    """
+    try:
+        with open(file_path, "rb") as f:
+            data = f.read()
+
+        # Locate the start of the LAS binary header (b'LASF')
+        binary_start = data.find(b'LASF')
+        if binary_start == -1:
+            raise ValueError("No valid LAS binary header (b'LASF') found in the file.")
+
+        # Save the binary content to a new file
+        with open(temp_file_path, "wb") as f:
+            f.write(data[binary_start:])
+        print(f"[INFO] Non-binary header stripped. Cleaned file saved to {temp_file_path}.")
+        return temp_file_path
+    except Exception as e:
+        print(f"[ERROR] Failed to strip text header: {e}")
         raise
+
+def load_las_file(file_path):
+    """
+    Attempts to load the LAS file after verifying and cleaning if necessary.
+    """
+    try:
+        print("[INFO] Inspecting file format...")
+        file_type = inspect_file(file_path)
+
+        if file_type == "las_binary":
+            print("[INFO] Attempting to load as LAS binary file.")
+            las_file = laspy.read(file_path)
+            print("[SUCCESS] LAS file loaded successfully.")
+            return las_file
+        elif file_type == "text_with_header":
+            print("[INFO] Stripping text header and attempting to load the binary content.")
+            temp_file_path = file_path.replace(".las", "_cleaned.las")
+            cleaned_file_path = strip_text_header(file_path, temp_file_path)
+            las_file = laspy.read(cleaned_file_path)
+            print("[SUCCESS] LAS file loaded successfully after cleaning.")
+            return las_file
+        else:
+            print("[ERROR] Unsupported or unknown file format.")
+            return None
+    except laspy.errors.LaspyException as e:
+        print(f"[ERROR] Failed to read LAS file: {e}")
+    except Exception as e:
+        print(f"[ERROR] Unexpected error: {e}")
+        raise
+
+# Main driver function
+def main():
+    file_path = "/path/to/your/file.las"  # Replace with your LAS file path
+    try:
+        las_file = load_las_file(file_path)
+        if las_file:
+            print("[INFO] File processing complete. Here are the first few points:")
+            print(f"X: {las_file.x[:5]}, Y: {las_file.y[:5]}, Z: {las_file.z[:5]}")
+        else:
+            print("[FAILURE] Could not process the file. Please check the logs above.")
+    except Exception as e:
+        print(f"[CRITICAL ERROR] An unexpected error occurred: {e}")
+
+if __name__ == "__main__":
+    main()
