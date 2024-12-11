@@ -21,7 +21,10 @@ def load_ground_truth(file_path):
     except laspy.errors.LaspyException:
         # Handle as text file
         print("File is not a valid LAS file. Attempting to load as text file.")
-        ground_truth_data = pd.read_csv(file_path, delimiter="\t", names=["x", "y", "z", "ground_truth_label"])
+        # Read the text file as a DataFrame
+        ground_truth_data = pd.read_csv("/content/drive/MyDrive/t1/Mar18_test_GroundTruth.las", delimiter="\t")
+
+        
         print("Successfully loaded text file.")
         return ground_truth_data
 
@@ -74,6 +77,6 @@ if __name__ == "__main__":
     # File paths
     ground_truth_file = "/content/drive/MyDrive/t1/Mar18_test_GroundTruth.las"  # Adjust path as needed
     predictions_file = "/content/drive/MyDrive/t1/predictions.txt"  # Adjust path as needed
-
+    
     # Run the main function
     main(ground_truth_file, predictions_file)
