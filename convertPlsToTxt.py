@@ -1,14 +1,16 @@
 import laspy
 import pandas as pd
 import numpy as np
+import os
 
-def convert_las_to_csv(las_file_path, output_file_path):
+def convert_las_to_filtered_txt(las_file_path, output_txt_path, remove_zero_columns=True):
     """
-    Converts a .las file to a tab-separated text file with all its properties.
-    
+    Converts a .las file to a tab-separated .txt file and removes zero-filled columns if specified.
+
     Parameters:
     las_file_path (str): Path to the input .las file.
-    output_file_path (str): Path to the output file (.txt or .csv).
+    output_txt_path (str): Path to the output file (.txt).
+    remove_zero_columns (bool): Whether to remove columns filled with zeros.
     """
     # Open the LAS file
     print(f"Reading LAS file: {las_file_path}")
@@ -31,14 +33,24 @@ def convert_las_to_csv(las_file_path, output_file_path):
         print("Converting to DataFrame...")
         df = pd.DataFrame(points_data)
         
-        # Save to tab-separated text file
-        print(f"Saving to file: {output_file_path}")
-        df.to_csv(output_file_path, sep="\t", index=False, float_format="%.8f")
+        if remove_zero_columns:
+            print("Removing zero-filled columns...")
+            # Remove columns where all values are zero
+            non_zero_columns = df.loc[:, (df != 0).any(axis=0)]
+            print(f"Removed {len(df.columns) - len(non_zero_columns.columns)} zero-filled columns.")
+            df = non_zero_columns
 
-    print("Conversion complete.")
+        # Ensure the output directory exists
+        os.makedirs(os.path.dirname(output_txt_path), exist_ok=True)
+
+        # Save to tab-separated .txt file
+        print(f"Saving to file: {output_txt_path}")
+        df.to_csv(output_txt_path, sep="\t", index=False, float_format="%.8f")
+        print("File saved successfully.")
 
 # Example usage
 if __name__ == "__main__":
-    input_las_file = "/content/drive/MyDrive/t1/Mar18_test_GroundTruth.las"
-    output_txt_file = "/content/drive/MyDrive/t1/Mar18_test_GroundTruth.txt"
-    convert_las_to_csv(input_las_file, output_txt_file)
+    input_las_file = "/path/to/your/input_file.las"  # Replace with the path to your .las file
+    output_txt_file = "/path/to/your/output_file.txt"  # Replace with the desired output path
+    
+    convert_las_to_filtered_txt(input_las_file, output_txt_file, remove_zero_columns=True)
