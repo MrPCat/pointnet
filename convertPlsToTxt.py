@@ -1,90 +1,61 @@
+import pandas as pd
 import laspy
-import os
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 
-def inspect_file(file_path):
-    """
-    Inspect the file to determine if it is a valid LAS file, has a text header, or is corrupted.
-    """
-    try:
-        with open(file_path, "rb") as f:
-            file_signature = f.read(4)
-        
-        if file_signature == b'LASF':
-            print("[INFO] File is a valid LAS binary file. Signature detected: LASF.")
-            return "las_binary"
-        elif b'\t' in file_signature or file_signature.decode(errors="ignore").startswith("X"):
-            print("[WARNING] File has a text-like header. Signature detected: Text header.")
-            return "text_with_header"
-        else:
-            print("[ERROR] File signature does not match LAS or text header standards.")
-            return "unknown_format"
-    except Exception as e:
-        print(f"[ERROR] Failed to inspect file: {e}")
-        return "error"
+# Step 1: Load the .txt file
+def load_txt_file(txt_file):
+    # Load data as a pandas DataFrame
+    df = pd.read_csv(txt_file, sep="\t")  # Adjust delimiter if needed
+    return df
 
-def strip_text_header(file_path, temp_file_path):
-    """
-    Removes any text-based headers from a LAS file and saves the binary content to a new file.
-    """
-    try:
-        with open(file_path, "rb") as f:
-            data = f.read()
+# Step 2: Load the .las file
+def load_las_file(las_file):
+    las = laspy.read(las_file)
+    # Extract classifications
+    classifications = las.classification
+    # Extract X, Y, Z coordinates for alignment
+    coords = pd.DataFrame({'X': las.x, 'Y': las.y, 'Z': las.z, 'Classification': classifications})
+    return coords
 
-        # Locate the start of the LAS binary header (b'LASF')
-        binary_start = data.find(b'LASF')
-        if binary_start == -1:
-            raise ValueError("No valid LAS binary header (b'LASF') found in the file.")
+# Step 3: Merge data based on coordinates
+def merge_data(txt_df, las_df):
+    # Perform a merge on X, Y, Z coordinates to align points
+    merged = pd.merge(txt_df, las_df, on=["X", "Y", "Z"], suffixes=("_pred", "_ref"))
+    return merged
 
-        # Save the binary content to a new file
-        with open(temp_file_path, "wb") as f:
-            f.write(data[binary_start:])
-        print(f"[INFO] Non-binary header stripped. Cleaned file saved to {temp_file_path}.")
-        return temp_file_path
-    except Exception as e:
-        print(f"[ERROR] Failed to strip text header: {e}")
-        raise
+# Step 4: Evaluate accuracy and generate metrics
+def evaluate_classes(merged_data):
+    # Predicted and reference classes
+    y_pred = merged_data["Classification_pred"]
+    y_ref = merged_data["Classification_ref"]
+    
+    # Calculate accuracy
+    accuracy = accuracy_score(y_ref, y_pred)
+    print(f"Accuracy: {accuracy * 100:.2f}%")
+    
+    # Generate confusion matrix
+    print("\nConfusion Matrix:")
+    print(confusion_matrix(y_ref, y_pred))
+    
+    # Detailed classification report
+    print("\nClassification Report:")
+    print(classification_report(y_ref, y_pred))
 
-def load_las_file(file_path):
-    """
-    Attempts to load the LAS file after verifying and cleaning if necessary.
-    """
-    try:
-        print("[INFO] Inspecting file format...")
-        file_type = inspect_file(file_path)
+# Main function
+def main(txt_file, las_file):
+    # Load data
+    txt_data = load_txt_file(txt_file)
+    las_data = load_las_file(las_file)
+    
+    # Merge data
+    merged_data = merge_data(txt_data, las_data)
+    
+    # Evaluate classifications
+    evaluate_classes(merged_data)
 
-        if file_type == "las_binary":
-            print("[INFO] Attempting to load as LAS binary file.")
-            las_file = laspy.read(file_path)
-            print("[SUCCESS] LAS file loaded successfully.")
-            return las_file
-        elif file_type == "text_with_header":
-            print("[INFO] Stripping text header and attempting to load the binary content.")
-            temp_file_path = file_path.replace(".las", "_cleaned.las")
-            cleaned_file_path = strip_text_header(file_path, temp_file_path)
-            las_file = laspy.read(cleaned_file_path)
-            print("[SUCCESS] LAS file loaded successfully after cleaning.")
-            return las_file
-        else:
-            print("[ERROR] Unsupported or unknown file format.")
-            return None
-    except laspy.errors.LaspyException as e:
-        print(f"[ERROR] Failed to read LAS file: {e}")
-    except Exception as e:
-        print(f"[ERROR] Unexpected error: {e}")
-        raise
+# Replace with your actual file paths
+txt_file = "/content/drive/MyDrive/t1/predictions.txt"
+las_file = "/content/drive/MyDrive/t1/Mar18_test_GroundTruth.las"
 
-# Main driver function
-def main():
-    file_path = "/content/drive/MyDrive/t1/Mar18_test_GroundTruth.las"  # Replace with your LAS file path
-    try:
-        las_file = load_las_file(file_path)
-        if las_file:
-            print("[INFO] File processing complete. Here are the first few points:")
-            print(f"X: {las_file.x[:5]}, Y: {las_file.y[:5]}, Z: {las_file.z[:5]}")
-        else:
-            print("[FAILURE] Could not process the file. Please check the logs above.")
-    except Exception as e:
-        print(f"[CRITICAL ERROR] An unexpected error occurred: {e}")
-
-if __name__ == "__main__":
-    main()
+# Run the comparison
+main(txt_file, las_file)
