@@ -50,7 +50,7 @@ def convert_las_to_filtered_txt(las_file_path, output_txt_path, remove_zero_colu
 
 # Example usage
 if __name__ == "__main__":
-    input_las_file = "/path/to/your/input_file.las"  # Replace with the path to your .las file
-    output_txt_file = "/path/to/your/output_file.txt"  # Replace with the desired output path
+    input_las_file = "/content/drive/MyDrive/t1/Mar18_test_GroundTruth.las"  # Replace with the path to your .las file
+    output_txt_file = "/content/drive/MyDrive/t1/Mar18_test_GroundTruth.txt"  # Replace with the desired output path
     
     convert_las_to_filtered_txt(input_las_file, output_txt_file, remove_zero_columns=True)
