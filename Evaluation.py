@@ -6,6 +6,7 @@ from sklearn.metrics import accuracy_score, confusion_matrix, classification_rep
 def load_txt_file(txt_file):
     # Load data as a pandas DataFrame
     df = pd.read_csv(txt_file, sep="\t")  # Adjust delimiter if needed
+    print("Load text Done!")
     return df
 
 # Step 2: Load the .las file
@@ -15,12 +16,14 @@ def load_las_file(las_file):
     classifications = las.classification
     # Extract X, Y, Z coordinates for alignment
     coords = pd.DataFrame({'X': las.x, 'Y': las.y, 'Z': las.z, 'Classification': classifications})
+    print("load las Done")
     return coords
 
 # Step 3: Merge data based on coordinates
 def merge_data(txt_df, las_df):
     # Perform a merge on X, Y, Z coordinates to align points
     merged = pd.merge(txt_df, las_df, on=["X", "Y", "Z"], suffixes=("_pred", "_ref"))
+    print("merge Done")
     return merged
 
 # Step 4: Evaluate accuracy and generate metrics
