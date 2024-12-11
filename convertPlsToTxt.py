@@ -29,10 +29,6 @@ def convert_las_to_filtered_csv(las_file_path, output_file_path, remove_zero_col
         # Convert to DataFrame
         df = pd.DataFrame(points_data)
         
-        # Optionally remove zero-filled columns
-        if remove_zero_columns:
-            df = df.loc[:, (df != 0).any(axis=0)]
-        
         # Save as tab-separated text file
         df.to_csv(output_file_path, sep="\t", index=False)
         print(f"Conversion successful. Saved to {output_file_path}")
