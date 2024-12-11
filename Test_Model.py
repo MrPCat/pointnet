@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
-from pointnet_ import PointNet2ClsSSG  
+from pointnet_ import PointNet2ClsSSG  # Ensure this matches the model from training
 import pandas as pd
 
 class PointCloudDataset(Dataset):
@@ -22,16 +22,12 @@ class PointCloudDataset(Dataset):
         
         # Truncate or pad to ensure exact division
         if len(self.xyz) % self.points_per_cloud != 0:
-            # Option 1: Truncate
             self.xyz = self.xyz[:self.num_clouds * self.points_per_cloud]
             self.features = self.features[:self.num_clouds * self.points_per_cloud]
-            
-            # Alternatively, Option 2: Pad with zeros or repeat last points
-            # self.xyz = np.pad(self.xyz, ((0, self.points_per_cloud - (len(self.xyz) % self.points_per_cloud)), (0, 0)), mode='constant')
-            # self.features = np.pad(self.features, ((0, self.points_per_cloud - (len(self.features) % self.points_per_cloud)), (0, 0)), mode='constant')
         
         if debug:
             self.print_debug_info()
+
     def print_debug_info(self):
         print("\n--- Dataset Debugging Information ---")
         print(f"Total Points: {len(self.xyz)}")
@@ -59,7 +55,6 @@ class PointCloudDataset(Dataset):
         return features, xyz
 
 
-
 def load_model(model_path, input_dim, output_dim):
     model = PointNet2ClsSSG(in_dim=input_dim, out_dim=output_dim)
     try:
@@ -83,36 +78,31 @@ if __name__ == "__main__":
     # Load the model
     input_dim = test_dataset.features.shape[1]
     model = load_model(model_path, input_dim=input_dim, output_dim=11)  # Adjust `output_dim` based on your classes
-    model.to('cuda' if torch.cuda.is_available() else 'cpu')
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    model.to(device)
     model.eval()
 
     # DataLoader
     print("CUDA Available:", torch.cuda.is_available())
-    
     test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
 
+    # Predictions
     all_predictions = []
     with torch.no_grad():
         for features, xyz in test_loader:
-            # Debug prints
-            print("Features shape:", features.shape)
-            print("XYZ shape:", xyz.shape)
-            print("Features dtype:", features.dtype)
-            print("XYZ dtype:", xyz.dtype)
+            features, xyz = features.to(device), xyz.to(device)
             
-            features, xyz = features.to('cuda'), xyz.to('cuda')
-            
-            try:
-                logits = model(features, xyz)
-                predictions = torch.argmax(logits, dim=1)
-                all_predictions.extend(predictions.cpu().numpy())
-            except RuntimeError as e:
-                print(f"Error during inference: {e}")
-                # Add more detailed error handling or debugging here
-                raise
+            # Pass through the model
+            logits = model(features, xyz)  # Output logits
+            predictions = torch.argmax(logits, dim=1)  # Class predictions
+            all_predictions.extend(predictions.cpu().numpy())
 
     # Save predictions
-    augmented_data = np.hstack([test_dataset.xyz, test_dataset.features, np.array(all_predictions).reshape(-1, 1)])
+    point_cloud_predictions = np.array(all_predictions).reshape(-1, 1)  # Reshape predictions
+    augmented_data = np.hstack([test_dataset.xyz[:len(point_cloud_predictions) * test_dataset.points_per_cloud],
+                                test_dataset.features[:len(point_cloud_predictions) * test_dataset.points_per_cloud],
+                                np.repeat(point_cloud_predictions, test_dataset.points_per_cloud, axis=0)])
+    
     np.savetxt(output_file, augmented_data, delimiter='\t', fmt='%0.8f',
                header='X\tY\tZ\tR\tG\tB\tReflectance\tNumberOfReturns\tReturnNumber\tClassification', comments='')
     print(f"Predictions saved to {output_file}")
