@@ -46,16 +46,17 @@ class PointCloudDataset(Dataset):
     def __getitem__(self, idx):
         start = idx * self.points_per_cloud
         end = start + self.points_per_cloud
-        
-        # Ensure correct tensor shapes
-        xyz = torch.tensor(self.xyz[start:end], dtype=torch.float64)  # [points_per_cloud, 3]
-        features = torch.tensor(self.features[start:end], dtype=torch.float64)  # [points_per_cloud, feature_dim]
-        
+
+        # Convert XYZ and features to float32 tensors
+        xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32)  # [points_per_cloud, 3]
+        features = torch.tensor(self.features[start:end], dtype=torch.float32)  # [points_per_cloud, feature_dim]
+
         # Transpose to match PointNet2 expected input
         xyz = xyz.transpose(0, 1)  # [3, points_per_cloud]
         features = features.transpose(0, 1)  # [feature_dim, points_per_cloud]
-        
+
         return features, xyz
+
 
 def load_model(model_path, input_dim, output_dim):
     model = PointNet2ClsSSG(in_dim=input_dim, out_dim=output_dim)
@@ -85,30 +86,32 @@ if __name__ == "__main__":
     model.eval()
 
     # DataLoader
-    print("CUDA Available:", torch.cuda.is_available())
-    test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
+print("CUDA Available:", torch.cuda.is_available())
+test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
 
-    # Predictions
-    all_predictions = []
-    with torch.no_grad():
-        for features, xyz in test_loader:
-            features, xyz = features.to(device), xyz.to(device)
-            
-            # Pass through the model
-            logits = model(features, xyz)  # Output logits
-            predictions = torch.argmax(logits, dim=1)  # Class predictions
-            all_predictions.extend(predictions.cpu().numpy())
+# Predictions
+all_predictions = []
+with torch.no_grad():
+    for features, xyz in test_loader:
+        # Move tensors to device
+        features, xyz = features.to(device, dtype=torch.float32), xyz.to(device, dtype=torch.float32)
+        
+        # Pass through the model
+        logits = model(features, xyz)  # Output logits
+        predictions = torch.argmax(logits, dim=1)  # Class predictions
+        all_predictions.extend(predictions.cpu().numpy())
 
-    # Save predictions
-    point_cloud_predictions = np.array(all_predictions, dtype=np.float64).reshape(-1, 1)  # Reshape predictions
-    denormalized_xyz = (test_dataset.xyz[:len(point_cloud_predictions) * test_dataset.points_per_cloud]
-                        + test_dataset.xyz_mean).astype(np.float64)
+# Save predictions (denormalization in float64)
+point_cloud_predictions = np.array(all_predictions).reshape(-1, 1).astype(np.float64)
+denormalized_xyz = (test_dataset.xyz[:len(point_cloud_predictions) * test_dataset.points_per_cloud]
+                    + test_dataset.xyz_mean).astype(np.float64)
 
-    augmented_data = np.hstack([denormalized_xyz,
-                                test_dataset.features[:len(point_cloud_predictions) * test_dataset.points_per_cloud],
-                                np.repeat(point_cloud_predictions, test_dataset.points_per_cloud, axis=0)])
+augmented_data = np.hstack([denormalized_xyz,
+                            test_dataset.features[:len(point_cloud_predictions) * test_dataset.points_per_cloud],
+                            np.repeat(point_cloud_predictions, test_dataset.points_per_cloud, axis=0)])
 
-    np.savetxt(output_file, augmented_data, delimiter='\t', fmt='%.15f',  # Double precision in output
-            header='X\tY\tZ\tR\tG\tB\tReflectance\tNumberOfReturns\tReturnNumber\tClassification', comments='')
-    print(f"Predictions saved to {output_file}")
+np.savetxt(output_file, augmented_data, delimiter='\t', fmt='%.15f',
+           header='X\tY\tZ\tR\tG\tB\tReflectance\tNumberOfReturns\tReturnNumber\tClassification', comments='')
+print(f"Predictions saved to {output_file}")
+
 
