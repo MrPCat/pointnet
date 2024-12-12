@@ -7,14 +7,17 @@ import pandas as pd
 class PointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
         # Load the dataset
-        data = pd.read_csv(file_path, delimiter='\t').values
+        data = pd.read_csv(file_path, delimiter='\t', dtype=np.float64).values  # Ensure float64 precision
         
         # Extract XYZ and Features (excluding XYZ columns explicitly)
-        self.xyz = data[:, :3]  # Assuming the first three columns are always XYZ
-        self.features = data[:, 3:]  # Starting from the fourth column onwards
+        self.xyz = data[:, :3].astype(np.float64)  # XYZ as float64
+        self.features = data[:, 3:].astype(np.float64)  # Features as float64
+        
+        # Save the mean for denormalization later
+        self.xyz_mean = np.mean(self.xyz, axis=0).astype(np.float64)
         
         # Normalize XYZ
-        self.xyz -= np.mean(self.xyz, axis=0)
+        self.xyz -= self.xyz_mean
         
         # Ensure data is divisible by points_per_cloud
         self.points_per_cloud = points_per_cloud
@@ -35,9 +38,9 @@ class PointCloudDataset(Dataset):
         print(f"Number of Point Clouds: {self.num_clouds}")
         print(f"XYZ Shape: {self.xyz.shape}")
         print(f"Features Shape: {self.features.shape}")
+        print(f"XYZ Mean: {self.xyz_mean}")
     
     def __len__(self):
-        # Return the number of point clouds
         return self.num_clouds
 
     def __getitem__(self, idx):
@@ -45,15 +48,14 @@ class PointCloudDataset(Dataset):
         end = start + self.points_per_cloud
         
         # Ensure correct tensor shapes
-        xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32)  # [points_per_cloud, 3]
-        features = torch.tensor(self.features[start:end], dtype=torch.float32)  # [points_per_cloud, feature_dim]
+        xyz = torch.tensor(self.xyz[start:end], dtype=torch.float64)  # [points_per_cloud, 3]
+        features = torch.tensor(self.features[start:end], dtype=torch.float64)  # [points_per_cloud, feature_dim]
         
         # Transpose to match PointNet2 expected input
         xyz = xyz.transpose(0, 1)  # [3, points_per_cloud]
         features = features.transpose(0, 1)  # [feature_dim, points_per_cloud]
         
         return features, xyz
-
 
 def load_model(model_path, input_dim, output_dim):
     model = PointNet2ClsSSG(in_dim=input_dim, out_dim=output_dim)
@@ -98,11 +100,15 @@ if __name__ == "__main__":
             all_predictions.extend(predictions.cpu().numpy())
 
     # Save predictions
-    point_cloud_predictions = np.array(all_predictions).reshape(-1, 1)  # Reshape predictions
-    augmented_data = np.hstack([test_dataset.xyz[:len(point_cloud_predictions) * test_dataset.points_per_cloud],
+    point_cloud_predictions = np.array(all_predictions, dtype=np.float64).reshape(-1, 1)  # Reshape predictions
+    denormalized_xyz = (test_dataset.xyz[:len(point_cloud_predictions) * test_dataset.points_per_cloud]
+                        + test_dataset.xyz_mean).astype(np.float64)
+
+    augmented_data = np.hstack([denormalized_xyz,
                                 test_dataset.features[:len(point_cloud_predictions) * test_dataset.points_per_cloud],
                                 np.repeat(point_cloud_predictions, test_dataset.points_per_cloud, axis=0)])
-    
-    np.savetxt(output_file, augmented_data, delimiter='\t', fmt='%0.8f',
-               header='X\tY\tZ\tR\tG\tB\tReflectance\tNumberOfReturns\tReturnNumber\tClassification', comments='')
+
+    np.savetxt(output_file, augmented_data, delimiter='\t', fmt='%.15f',  # Double precision in output
+            header='X\tY\tZ\tR\tG\tB\tReflectance\tNumberOfReturns\tReturnNumber\tClassification', comments='')
     print(f"Predictions saved to {output_file}")
+
