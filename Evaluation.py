@@ -122,8 +122,8 @@ def main(txt_file, las_file):
     evaluate_classes(merged_data) 
 
 # Replace with your actual file paths 
-txt_file = r"C:\Users\faars\Downloads\predictions.txt"
-las_file = r"C:\Farshid\Uni\Semesters\Thesis\Data\Epoch_March2018\LiDAR\Mar18_test_GroundTruth.las" 
+txt_file = r"/content/drive/MyDrive/t1/predictions.txt"
+las_file = r"/content/drive/MyDrive/t1/Mar18_test_GroundTruth.las" 
  
 # Run the comparison 
 main(txt_file, las_file)
