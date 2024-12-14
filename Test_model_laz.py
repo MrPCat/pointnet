@@ -13,7 +13,6 @@ class PointCloudDataset(Dataset):
         # Extract point cloud data
         data = np.column_stack([
             las.x, las.y, las.z,  # XYZ coordinates
-            las.red, las.green, las.blue,  # RGB values
             las.intensity,  # Intensity
             las.num_returns,  # Number of returns
             las.return_num  # Return number
