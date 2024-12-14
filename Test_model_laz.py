@@ -3,6 +3,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from pointnet_ import PointNet2ClsSSG  # Ensure this matches the model from training
 import pandas as pd
+import laspy 
 
 class PointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
