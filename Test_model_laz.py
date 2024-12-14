@@ -4,12 +4,6 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from pointnet_ import PointNet2ClsSSG  # Adjust this import to your model's structure
 
-import numpy as np
-import laspy
-
-import numpy as np
-import laspy
-
 def process_nrw_laz_with_priority_classes(file_path):
     las = laspy.read(file_path)
 
