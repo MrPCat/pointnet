@@ -11,7 +11,7 @@ def process_nrw_laz(file_path):
     
     # One-hot encode the classification feature
     unique_classes = np.unique(las.classification)
-    one_hot_classification = np.eye(len(unique_classes))[las.classification.astype(int)]
+    one_hot_classification = np.eye(len(unique_classes))[las.classification.dtype(int)]
     
     # Combine features, substituting RGB with proxy features
     data = np.column_stack([
@@ -38,8 +38,8 @@ class PointCloudDatasetNRW(Dataset):
         self.data = process_nrw_laz(file_path)
         
         # Extract XYZ and features
-        self.xyz = self.data[:, :3].astype(np.float64)  # XYZ
-        self.features = self.data[:, 3:].astype(np.float64)  # Features
+        self.xyz = self.data[:, :3].dtype(np.float64)  # XYZ
+        self.features = self.data[:, 3:].dtype(np.float64)  # Features
         
         # Normalize XYZ
         self.xyz_mean = np.mean(self.xyz, axis=0)
@@ -124,9 +124,9 @@ if __name__ == "__main__":
             all_predictions.extend(predictions.cpu().numpy())
 
     # Save predictions
-    point_cloud_predictions = np.array(all_predictions).reshape(-1, 1).astype(np.float64)
+    point_cloud_predictions = np.array(all_predictions).reshape(-1, 1).dtype(np.float64)
     denormalized_xyz = (test_dataset.xyz[:len(point_cloud_predictions) * test_dataset.points_per_cloud]
-                        + test_dataset.xyz_mean).astype(np.float64)
+                        + test_dataset.xyz_mean).dtype(np.float64)
 
     augmented_data = np.hstack([denormalized_xyz,
                                 test_dataset.features[:len(point_cloud_predictions) * test_dataset.points_per_cloud],
