@@ -4,15 +4,22 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from pointnet_ import PointNet2ClsSSG  # Adjust this import to your model's structure
 
-# Process NRW data
 def process_nrw_laz(file_path):
     # Open the LAZ file
     las = laspy.read(file_path)
     
-    # One-hot encode the classification feature
+    # Get unique classes
     unique_classes = np.unique(las.classification)
-    one_hot_classification = np.eye(len(unique_classes))[las.classification.dtype(int)]
-    
+
+    # Create a mapping from class values to indices
+    class_to_index = {cls: idx for idx, cls in enumerate(unique_classes)}
+
+    # Map classifications to their indices
+    classification_indices = np.array([class_to_index[cls] for cls in las.classification])
+
+    # One-hot encode classification
+    one_hot_classification = np.eye(len(unique_classes))[classification_indices]
+
     # Combine features, substituting RGB with proxy features
     data = np.column_stack([
         las.x, las.y, las.z,  # XYZ coordinates
@@ -28,7 +35,7 @@ def process_nrw_laz(file_path):
     data[:, 4] = data[:, 4] / np.max(data[:, 4])  # Normalize num_returns
     data[:, 5] = data[:, 5] / np.max(data[:, 5])  # Normalize return_num
     data[:, 6] = (data[:, 6] + 90) / 180 * 255  # Normalize scan_angle_rank
-    
+
     return data
 
 # Dataset Class
