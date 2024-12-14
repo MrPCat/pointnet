@@ -7,52 +7,58 @@ from pointnet_ import PointNet2ClsSSG  # Adjust this import to your model's stru
 import numpy as np
 import laspy
 
-def process_nrw_laz_with_9_features(file_path):
+import numpy as np
+import laspy
+
+def process_nrw_laz_with_priority_classes(file_path):
     las = laspy.read(file_path)
 
-    # Define key classes and map them to indices
+    # Define class mapping for your top 5 classes
     class_mapping = {
-        2: 0,  # Ground points
-        9: 1,  # Water points
-        17: 2,  # Bridge points
-        20: 3,  # Last return non-ground
-        24: 4,  # Kellerpunkte
-        26: 5,  # Synthetic filled ground points
-        1: 6,   # Unclassified points (fallback)
+        2: 0,   # Ground points (Bodenpunkte)
+        20: 1,  # Last return non-ground
+        26: 2,  # Synthetic filled ground points
+        9: 3,   # Synthetic water points
+        21: 4,  # Synthetic building points
     }
-    
-    # Map classifications
+
+    # Map classifications to your prioritized indices
     mapped_classes = np.array([class_mapping.get(cls, -1) for cls in las.classification])
+    
+    # One-hot encode the 5 prioritized classes
+    num_classes = len(class_mapping)  # 5 important classes
+    one_hot_classes = np.zeros((len(mapped_classes), num_classes))
+    for i in range(num_classes):
+        one_hot_classes[:, i] = (mapped_classes == i).astype(float)
+    
+    # Filter out invalid classes (-1) if desired
     valid_mask = mapped_classes != -1
-    las = laspy.LasData(las.points[valid_mask])  # Filter points
-    mapped_classes = mapped_classes[valid_mask]
+    filtered_xyz = np.column_stack([las.x[valid_mask], las.y[valid_mask], las.z[valid_mask]])
+    filtered_intensity = las.intensity[valid_mask]
+    filtered_num_returns = las.num_returns[valid_mask]
+    filtered_return_num = las.return_num[valid_mask]
+    one_hot_classes = one_hot_classes[valid_mask]
 
-    # One-hot encode the 2 most frequent classes
-    unique_classes, counts = np.unique(mapped_classes, return_counts=True)
-    top_classes = unique_classes[np.argsort(counts)[-2:]]  # Pick the top 2 classes
-    one_hot_classes = np.zeros((len(mapped_classes), 2))
-    for i, cls in enumerate(top_classes):
-        one_hot_classes[:, i] = (mapped_classes == cls).astype(float)
-
-    # Synthetic feature: normalized height (Z - min(Z)) / (max(Z) - min(Z))
-    normalized_height = (las.z - np.min(las.z)) / (np.max(las.z) - np.min(las.z))
+    # Add synthetic feature: normalized height
+    normalized_height = (filtered_xyz[:, 2] - np.min(filtered_xyz[:, 2])) / (
+        np.max(filtered_xyz[:, 2]) - np.min(filtered_xyz[:, 2])
+    )
 
     # Combine features into a 9-dimensional feature set
     data = np.column_stack([
-        las.x, las.y, las.z,                 # XYZ coordinates (3 features)
-        las.intensity / np.max(las.intensity) * 255,  # Intensity (1 feature)
-        las.num_returns / np.max(las.num_returns),    # Number of returns (1 feature)
-        las.return_num / np.max(las.return_num),      # Return number (1 feature)
-        one_hot_classes,                    # Two one-hot-encoded classification features
-        normalized_height                   # Normalized height (1 feature)
+        filtered_xyz,                               # XYZ coordinates (3 features)
+        filtered_intensity / np.max(filtered_intensity) * 255,  # Intensity (1 feature)
+        filtered_num_returns / np.max(filtered_num_returns),    # Number of returns (1 feature)
+        filtered_return_num / np.max(filtered_return_num),      # Return number (1 feature)
+        one_hot_classes,                          # One-hot-encoded classes (5 features)
+        normalized_height                         # Normalized height (1 feature)
     ])
 
     return data
 
-
 class PointCloudDatasetNRW(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
-        self.data = process_nrw_laz_with_9_features(file_path)
+        self.data = process_nrw_laz_with_priority_classes(file_path)
         self.xyz = self.data[:, :3].astype(np.float64)  # XYZ coordinates
         self.features = self.data[:, 3:].astype(np.float32)  # Other features
         self.xyz_mean = np.mean(self.xyz, axis=0, dtype=np.float64)
