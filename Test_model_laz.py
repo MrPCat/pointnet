@@ -6,8 +6,17 @@ import pandas as pd
 
 class PointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
-        # Load the dataset
-        data = pd.read_csv(file_path, delimiter='\t', dtype=np.float64).values  # Ensure float64 precision
+        # Read LAZ file directly using laspy
+        las = laspy.read(file_path)
+        
+        # Extract point cloud data
+        data = np.column_stack([
+            las.x, las.y, las.z,  # XYZ coordinates
+            las.red, las.green, las.blue,  # RGB values
+            las.intensity,  # Intensity
+            las.num_returns,  # Number of returns
+            las.return_num  # Return number
+        ])
         
         # Extract XYZ and Features (excluding XYZ columns explicitly)
         self.xyz = data[:, :3].astype(np.float64)  # XYZ as float64
