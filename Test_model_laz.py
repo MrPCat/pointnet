@@ -4,59 +4,63 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from pointnet_ import PointNet2ClsSSG  # Adjust this import to your model's structure
 
-def process_nrw_laz(file_path):
-    # Open the LAZ file
+import numpy as np
+import laspy
+
+def process_nrw_laz_with_9_features(file_path):
     las = laspy.read(file_path)
+
+    # Define key classes and map them to indices
+    class_mapping = {
+        2: 0,  # Ground points
+        9: 1,  # Water points
+        17: 2,  # Bridge points
+        20: 3,  # Last return non-ground
+        24: 4,  # Kellerpunkte
+        26: 5,  # Synthetic filled ground points
+        1: 6,   # Unclassified points (fallback)
+    }
     
-    # Get unique classes
-    unique_classes = np.unique(las.classification)
+    # Map classifications
+    mapped_classes = np.array([class_mapping.get(cls, -1) for cls in las.classification])
+    valid_mask = mapped_classes != -1
+    las = laspy.LasData(las.points[valid_mask])  # Filter points
+    mapped_classes = mapped_classes[valid_mask]
 
-    # Create a mapping from class values to indices
-    class_to_index = {cls: idx for idx, cls in enumerate(unique_classes)}
+    # One-hot encode the 2 most frequent classes
+    unique_classes, counts = np.unique(mapped_classes, return_counts=True)
+    top_classes = unique_classes[np.argsort(counts)[-2:]]  # Pick the top 2 classes
+    one_hot_classes = np.zeros((len(mapped_classes), 2))
+    for i, cls in enumerate(top_classes):
+        one_hot_classes[:, i] = (mapped_classes == cls).astype(float)
 
-    # Map classifications to their indices
-    classification_indices = np.array([class_to_index[cls] for cls in las.classification])
+    # Synthetic feature: normalized height (Z - min(Z)) / (max(Z) - min(Z))
+    normalized_height = (las.z - np.min(las.z)) / (np.max(las.z) - np.min(las.z))
 
-    # One-hot encode classification
-    one_hot_classification = np.eye(len(unique_classes))[classification_indices]
-
-    # Combine features, substituting RGB with proxy features
+    # Combine features into a 9-dimensional feature set
     data = np.column_stack([
-        las.x, las.y, las.z,  # XYZ coordinates
-        las.intensity,  # Intensity as proxy
-        las.num_returns,  # Number of returns
-        las.return_num,  # Return number
-        las.scan_angle_rank,  # Scan angle rank
-        one_hot_classification  # One-hot encoded classification
+        las.x, las.y, las.z,                 # XYZ coordinates (3 features)
+        las.intensity / np.max(las.intensity) * 255,  # Intensity (1 feature)
+        las.num_returns / np.max(las.num_returns),    # Number of returns (1 feature)
+        las.return_num / np.max(las.return_num),      # Return number (1 feature)
+        one_hot_classes,                    # Two one-hot-encoded classification features
+        normalized_height                   # Normalized height (1 feature)
     ])
-    
-    # Normalize numeric features
-    data[:, 3] = data[:, 3] / np.max(data[:, 3]) * 255  # Normalize intensity
-    data[:, 4] = data[:, 4] / np.max(data[:, 4])  # Normalize num_returns
-    data[:, 5] = data[:, 5] / np.max(data[:, 5])  # Normalize return_num
-    data[:, 6] = (data[:, 6] + 90) / 180 * 255  # Normalize scan_angle_rank
 
     return data
 
+
 class PointCloudDatasetNRW(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
-        # Process NRW data
-        self.data = process_nrw_laz(file_path)
-        
-        # Extract XYZ and features
-        self.xyz = self.data[:, :3].astype(np.float64)  # Keep XYZ as float64
-        self.features = self.data[:, 3:].astype(np.float32)  # Convert other features to float32
-        
-        # Normalize XYZ
-        self.xyz_mean = np.mean(self.xyz, axis=0, dtype=np.float64)  # Ensure float64 precision
-        self.xyz -= self.xyz_mean  # Subtract mean for normalization
-
-        # Ensure data is divisible by points_per_cloud
+        self.data = process_nrw_laz_with_9_features(file_path)
+        self.xyz = self.data[:, :3].astype(np.float64)  # XYZ coordinates
+        self.features = self.data[:, 3:].astype(np.float32)  # Other features
+        self.xyz_mean = np.mean(self.xyz, axis=0, dtype=np.float64)
+        self.xyz -= self.xyz_mean
         self.points_per_cloud = points_per_cloud
         self.num_clouds = len(self.xyz) // self.points_per_cloud
         self.xyz = self.xyz[:self.num_clouds * self.points_per_cloud]
         self.features = self.features[:self.num_clouds * self.points_per_cloud]
-        
         if debug:
             self.print_debug_info()
 
@@ -74,15 +78,12 @@ class PointCloudDatasetNRW(Dataset):
     def __getitem__(self, idx):
         start = idx * self.points_per_cloud
         end = start + self.points_per_cloud
-
-        # Convert XYZ and features to tensors
-        xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32)  # Convert to float32 for compatibility
-        features = torch.tensor(self.features[start:end], dtype=torch.float32)  # Float32
-
-        xyz = xyz.transpose(0, 1)  # [3, points_per_cloud]
-        features = features.transpose(0, 1)  # [feature_dim, points_per_cloud]
-
+        xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32)
+        features = torch.tensor(self.features[start:end], dtype=torch.float32)
+        xyz = xyz.transpose(0, 1)
+        features = features.transpose(0, 1)
         return features, xyz
+
 
 # Load Model
 def load_model(model_path, input_dim, output_dim):
