@@ -38,19 +38,18 @@ def process_nrw_laz(file_path):
 
     return data
 
-# Dataset Class
 class PointCloudDatasetNRW(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
         # Process NRW data
         self.data = process_nrw_laz(file_path)
         
         # Extract XYZ and features
-        self.xyz = self.data[:, :3].dtype(np.float64)  # XYZ
-        self.features = self.data[:, 3:].dtype(np.float64)  # Features
+        self.xyz = self.data[:, :3].astype(np.float64)  # Keep XYZ as float64
+        self.features = self.data[:, 3:].astype(np.float32)  # Convert other features to float32
         
         # Normalize XYZ
-        self.xyz_mean = np.mean(self.xyz, axis=0)
-        self.xyz -= self.xyz_mean
+        self.xyz_mean = np.mean(self.xyz, axis=0, dtype=np.float64)  # Ensure float64 precision
+        self.xyz -= self.xyz_mean  # Subtract mean for normalization
 
         # Ensure data is divisible by points_per_cloud
         self.points_per_cloud = points_per_cloud
@@ -76,9 +75,9 @@ class PointCloudDatasetNRW(Dataset):
         start = idx * self.points_per_cloud
         end = start + self.points_per_cloud
 
-        # Convert XYZ and features to float32 tensors
-        xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32)
-        features = torch.tensor(self.features[start:end], dtype=torch.float32)
+        # Convert XYZ and features to tensors
+        xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32)  # Convert to float32 for compatibility
+        features = torch.tensor(self.features[start:end], dtype=torch.float32)  # Float32
 
         xyz = xyz.transpose(0, 1)  # [3, points_per_cloud]
         features = features.transpose(0, 1)  # [feature_dim, points_per_cloud]
