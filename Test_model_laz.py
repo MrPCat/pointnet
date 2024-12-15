@@ -11,9 +11,6 @@ def process_nrw_laz_with_priority_classes(file_path):
     class_mapping = {
         2: 0,   # Ground points (Bodenpunkte)
         20: 1,  # Last return non-ground
-        26: 2,  # Synthetic filled ground points
-        9: 3,   # Synthetic water points
-        21: 4,  # Synthetic building points
     }
 
     # Map classifications to your prioritized indices
