@@ -76,6 +76,7 @@ class PointCloudDataset(Dataset):
         return features, xyz
 
 
+
 def load_model(model_path, input_dim, output_dim):
     model = PointNet2ClsSSG(in_dim=input_dim, out_dim=output_dim)
     try:
