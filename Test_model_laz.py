@@ -4,7 +4,6 @@ import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 from pointnet_ import PointNet2ClsSSG
 
-
 class PointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
         try:
@@ -36,6 +35,7 @@ class PointCloudDataset(Dataset):
         # Extract XYZ and features
         self.xyz = data[[column_mapping['X'], column_mapping['Y'], column_mapping['Z']]].values.astype(np.float64)
         try:
+            # Ensure you're getting all 3 features by accessing their mapped column names
             self.features = data[
                 [column_mapping['Reflectance'], column_mapping['NumberOfReturns'], column_mapping['ReturnNumber']]
             ].values.astype(np.float64)
@@ -47,6 +47,7 @@ class PointCloudDataset(Dataset):
         # Normalize XYZ and features
         self.xyz_mean = np.mean(self.xyz, axis=0).astype(np.float64)
         self.xyz -= self.xyz_mean
+        # Normalize each feature column separately
         self.features = (self.features - np.mean(self.features, axis=0)) / np.std(self.features, axis=0)
 
         # Ensure divisibility by points_per_cloud
@@ -57,7 +58,6 @@ class PointCloudDataset(Dataset):
 
         if debug:
             self.print_debug_info()
-
     def print_debug_info(self):
         print("\n--- Dataset Debugging Information ---")
         print(f"Total Points: {len(self.xyz)}")
