@@ -7,7 +7,6 @@ from pointnet_ import PointNet2ClsSSG
 
 class PointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
-        # Read the first few rows to inspect column names
         try:
             sample_data = pd.read_csv(file_path, delimiter='\t', nrows=5)  # Read first 5 rows
             print("Column names in the dataset:", list(sample_data.columns))
@@ -15,35 +14,34 @@ class PointCloudDataset(Dataset):
             raise ValueError(f"Failed to read file {file_path} or inspect columns. Error: {e}")
 
         required_columns = ['X', 'Y', 'Z', 'Reflectance', 'NumberOfReturns', 'ReturnNumber']
-        # Create a mapping of required columns to available ones
+
+        # Map required columns to available ones
         column_mapping = {}
         for col in required_columns:
             for available_col in sample_data.columns:
-                if col.lower() in available_col.lower():  # Case-insensitive matching
+                if col.lower() in available_col.lower() or available_col.startswith('//'):
                     column_mapping[col] = available_col
                     break
             if col not in column_mapping:
                 raise ValueError(f"Missing required column: {col}. Available columns: {list(sample_data.columns)}")
 
-        # Use the mapped column names to load the dataset
+        print("Mapped column names:", column_mapping)  # Debug print for column mappings
+
+        # Load full dataset
         data = pd.read_csv(file_path, delimiter='\t')
+
+        # Extract XYZ and features
         self.xyz = data[[column_mapping['X'], column_mapping['Y'], column_mapping['Z']]].values.astype(np.float64)
         self.features = data[[column_mapping['Reflectance'], column_mapping['NumberOfReturns'], column_mapping['ReturnNumber']]].values.astype(np.float64)
 
-
-        # Save the mean for denormalization later
+        # Normalize XYZ and features
         self.xyz_mean = np.mean(self.xyz, axis=0).astype(np.float64)
-
-        # Normalize XYZ
         self.xyz -= self.xyz_mean
-
-        # Normalize features
         self.features = (self.features - np.mean(self.features, axis=0)) / np.std(self.features, axis=0)
 
-        # Ensure data is divisible by points_per_cloud
+        # Ensure divisibility by points_per_cloud
         self.points_per_cloud = points_per_cloud
         self.num_clouds = len(self.xyz) // self.points_per_cloud
-
         self.xyz = self.xyz[:self.num_clouds * self.points_per_cloud]
         self.features = self.features[:self.num_clouds * self.points_per_cloud]
 
@@ -65,15 +63,11 @@ class PointCloudDataset(Dataset):
     def __getitem__(self, idx):
         start = idx * self.points_per_cloud
         end = start + self.points_per_cloud
-
         xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32)
         features = torch.tensor(self.features[start:end], dtype=torch.float32)
-
         xyz = xyz.transpose(0, 1)
         features = features.transpose(0, 1)
-
         return features, xyz
-
 
 
 def load_model(model_path, input_dim, output_dim):
@@ -88,47 +82,31 @@ def load_model(model_path, input_dim, output_dim):
 
 
 def predict_point_cloud(test_file, model_path, output_file):
-    # Load the test dataset
     test_dataset = PointCloudDataset(test_file, points_per_cloud=1024, debug=True)
-
-    # Load the model
-    input_dim = test_dataset.features.shape[1] + 3  # Add 3 for XYZ dimensions
-    model = load_model(model_path, input_dim=input_dim, output_dim=11)  # Adjust output_dim based on your classes
+    input_dim = test_dataset.features.shape[1] + 3
+    model = load_model(model_path, input_dim=input_dim, output_dim=11)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model.to(device)
     model.eval()
-
-    # DataLoader
-    print("CUDA Available:", torch.cuda.is_available())
     test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
 
-    # Predictions
     all_predictions = []
     with torch.no_grad():
         for features, xyz in test_loader:
-            # Move tensors to device
-            features, xyz = features.to(device, dtype=torch.float32), xyz.to(device, dtype=torch.float32)
-
-            # Pass through the model
-            logits = model(features, xyz)  # Output logits
-            predictions = torch.argmax(logits, dim=1)  # Class predictions
+            features, xyz = features.to(device), xyz.to(device)
+            logits = model(features, xyz)
+            predictions = torch.argmax(logits, dim=1)
             all_predictions.extend(predictions.cpu().numpy())
 
-    # Save predictions
     point_cloud_predictions = np.array(all_predictions).reshape(-1, 1).astype(np.float64)
     denormalized_xyz = (test_dataset.xyz[:len(point_cloud_predictions) * test_dataset.points_per_cloud]
                         + test_dataset.xyz_mean).astype(np.float64)
-
-    # Determine feature names dynamically
     feature_columns = ['Reflectance', 'NumberOfReturns', 'ReturnNumber']
-
     augmented_data = np.hstack([
         denormalized_xyz,
         test_dataset.features[:len(point_cloud_predictions) * test_dataset.points_per_cloud],
         np.repeat(point_cloud_predictions, test_dataset.points_per_cloud, axis=0)
     ])
-
-    # Save results
     np.savetxt(output_file, augmented_data, delimiter='\t', fmt='%.15f',
                header='\t'.join(['X', 'Y', 'Z'] + feature_columns + ['Classification']),
                comments='')
@@ -136,9 +114,7 @@ def predict_point_cloud(test_file, model_path, output_file):
 
 
 if __name__ == "__main__":
-    # File paths
     test_file = '/content/drive/MyDrive/t1/Mar18_test.txt'
     model_path = '/content/drive/MyDrive/t1/checkpoints/pointnet_epoch_7.pth'
     output_file = '/content/drive/MyDrive/t1/Mar18_testWithoutRGB_predictions.txt'
-
     predict_point_cloud(test_file, model_path, output_file)
