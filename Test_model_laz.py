@@ -8,6 +8,7 @@ from pointnet_ import PointNet2ClsSSG
 class PointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
         try:
+            # Load the text file using pandas
             data = pd.read_csv(file_path, delimiter='\t')
             print("Dataset preview:\n", data.head())
             print("Columns in dataset:\n", list(data.columns))
@@ -119,7 +120,7 @@ def predict_point_cloud(test_file, model_path, output_file):
 
 
 if __name__ == "__main__":
-    test_file = '/content/drive/MyDrive/t1/Mar18_test.txt'
+    test_file = '/content/drive/MyDrive/t1/Mar18_test.txt'  # Replace with your .txt file path
     model_path = '/content/drive/MyDrive/t1/checkpoints/pointnet_model.pth'
     output_file = '/content/drive/MyDrive/t1/Mar18_testWithoutRGB_predictions.txt'
 
