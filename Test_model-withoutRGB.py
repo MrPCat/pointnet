@@ -145,6 +145,6 @@ if __name__ == "__main__":
     # File paths
     test_file = '/content/drive/MyDrive/t1/Mar18_test.txt'
     model_path = '/content/drive/MyDrive/t1/checkpoints/pointnet_epoch_7.pth'
-    output_file = '/content/drive/MyDrive/t1/3dm_32_280_5652_1_nw_predictions.txt'
+    output_file = '/content/drive/MyDrive/t1/Mar18_testWithoutRGB_predictions.txt'
 
     predict_point_cloud(test_file, model_path, output_file)
