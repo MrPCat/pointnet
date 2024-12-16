@@ -5,12 +5,6 @@ from torch.utils.data import Dataset, DataLoader
 from pointnet_ import PointNet2ClsSSG
 
 
-import pandas as pd
-import numpy as np
-import torch
-from torch.utils.data import Dataset
-
-
 class PointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
         # Read the first few rows to inspect column names
@@ -20,22 +14,22 @@ class PointCloudDataset(Dataset):
         except Exception as e:
             raise ValueError(f"Failed to read file {file_path} or inspect columns. Error: {e}")
 
-        # Define expected columns
         required_columns = ['X', 'Y', 'Z', 'Reflectance', 'NumberOfReturns', 'ReturnNumber']
+        # Create a mapping of required columns to available ones
+        column_mapping = {}
+        for col in required_columns:
+            for available_col in sample_data.columns:
+                if col.lower() in available_col.lower():  # Case-insensitive matching
+                    column_mapping[col] = available_col
+                    break
+            if col not in column_mapping:
+                raise ValueError(f"Missing required column: {col}. Available columns: {list(sample_data.columns)}")
 
-        # Check if all required columns are present
-        missing_columns = [col for col in required_columns if col not in sample_data.columns]
-        if missing_columns:
-            raise ValueError(f"Missing required columns: {missing_columns}. Available columns: {list(sample_data.columns)}")
-
-        # Load the full dataset
+        # Use the mapped column names to load the dataset
         data = pd.read_csv(file_path, delimiter='\t')
+        self.xyz = data[[column_mapping['X'], column_mapping['Y'], column_mapping['Z']]].values.astype(np.float64)
+        self.features = data[[column_mapping['Reflectance'], column_mapping['NumberOfReturns'], column_mapping['ReturnNumber']]].values.astype(np.float64)
 
-        # Extract XYZ coordinates
-        self.xyz = data[['X', 'Y', 'Z']].values.astype(np.float64)
-
-        # Extract additional features
-        self.features = data[['Reflectance', 'NumberOfReturns', 'ReturnNumber']].values.astype(np.float64)
 
         # Save the mean for denormalization later
         self.xyz_mean = np.mean(self.xyz, axis=0).astype(np.float64)
