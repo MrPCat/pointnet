@@ -12,7 +12,7 @@ class PointCloudDataset(Dataset):
         # Extract XYZ coordinates
         self.xyz = data[['X', 'Y', 'Z']].values.astype(np.float64)
         
-        # Extract additional features (excluding XYZ)
+        # Extract additional features (excluding RGB)
         feature_columns = ['Reflectance', 'NumberOfReturns', 'ReturnNumber']
         self.features = data[feature_columns].values.astype(np.float64)
         
