@@ -7,38 +7,50 @@ import pandas as pd
 
 class PointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
-        # Use laspy to read .las file
-        las = laspy.read(file_path)
-        
-        # Extract XYZ coordinates
-        self.xyz = np.column_stack([las.x, las.y, las.z]).astype(np.float64)
-        
-        # Extract additional point cloud features (non-RGB)
-        self.features = np.column_stack([
-            las.intensity,  # Intensity
-            las.return_number,  # Return number
-            las.number_of_returns,  # Number of returns
-            # Add any other non-color features you want to include
-        ]).astype(np.float64)
-        
-        # Save the mean for denormalization later
+        try:
+            # Inspect column names
+            sample_data = pd.read_csv(file_path, delimiter='\t', nrows=5)  # Read first 5 rows
+            print("Column names in the dataset:", list(sample_data.columns))
+        except Exception as e:
+            raise ValueError(f"Failed to read file {file_path} or inspect columns. Error: {e}")
+
+        required_columns = ['X', 'Y', 'Z', 'Reflectance', 'NumberOfReturns', 'ReturnNumber']
+
+        # Map required columns to available ones
+        column_mapping = {}
+        for col in required_columns:
+            for available_col in sample_data.columns:
+                if col.lower() in available_col.lower():  # Case-insensitive matching
+                    column_mapping[col] = available_col
+                    break
+            if col not in column_mapping:
+                raise ValueError(f"Missing required column: {col}. Available columns: {list(sample_data.columns)}")
+
+        print("Mapped column names:", column_mapping)  # Debug print for column mappings
+
+        # Load full dataset with chunks
+        print("Loading dataset in chunks...")
+        chunks = pd.read_csv(file_path, delimiter='\t', chunksize=10000)
+        data = pd.concat(chunks, ignore_index=True)
+        print("Dataset loaded successfully. Shape:", data.shape)
+
+        # Extract XYZ and features
+        self.xyz = data[[column_mapping['X'], column_mapping['Y'], column_mapping['Z']]].values.astype(np.float64)
+        self.features = data[
+            [column_mapping['Reflectance'], column_mapping['NumberOfReturns'], column_mapping['ReturnNumber']]
+        ].values.astype(np.float64)
+
+        # Normalize XYZ and features
         self.xyz_mean = np.mean(self.xyz, axis=0).astype(np.float64)
-        
-        # Normalize XYZ
         self.xyz -= self.xyz_mean
-        
-        # Normalize features
         self.features = (self.features - np.mean(self.features, axis=0)) / np.std(self.features, axis=0)
-        
-        # Ensure data is divisible by points_per_cloud
+
+        # Ensure divisibility by points_per_cloud
         self.points_per_cloud = points_per_cloud
         self.num_clouds = len(self.xyz) // self.points_per_cloud
-        
-        # Truncate or pad to ensure exact division
-        if len(self.xyz) % self.points_per_cloud != 0:
-            self.xyz = self.xyz[:self.num_clouds * self.points_per_cloud]
-            self.features = self.features[:self.num_clouds * self.points_per_cloud]
-        
+        self.xyz = self.xyz[:self.num_clouds * self.points_per_cloud]
+        self.features = self.features[:self.num_clouds * self.points_per_cloud]
+
         if debug:
             self.print_debug_info()
 
@@ -50,22 +62,17 @@ class PointCloudDataset(Dataset):
         print(f"XYZ Shape: {self.xyz.shape}")
         print(f"Features Shape: {self.features.shape}")
         print(f"XYZ Mean: {self.xyz_mean}")
-    
+
     def __len__(self):
         return self.num_clouds
 
     def __getitem__(self, idx):
         start = idx * self.points_per_cloud
         end = start + self.points_per_cloud
-
-        # Convert XYZ and features to float32 tensors
-        xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32)  # [points_per_cloud, 3]
-        features = torch.tensor(self.features[start:end], dtype=torch.float32)  # [points_per_cloud, feature_dim]
-
-        # Transpose to match PointNet2 expected input
-        xyz = xyz.transpose(0, 1)  # [3, points_per_cloud]
-        features = features.transpose(0, 1)  # [feature_dim, points_per_cloud]
-
+        xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32)
+        features = torch.tensor(self.features[start:end], dtype=torch.float32)
+        xyz = xyz.transpose(0, 1)
+        features = features.transpose(0, 1)
         return features, xyz
 
 def load_model(model_path, input_dim, output_dim):
