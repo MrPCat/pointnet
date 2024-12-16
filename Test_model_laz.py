@@ -9,23 +9,23 @@ class PointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
         # Load the text file
         try:
-            data = pd.read_csv(file_path, delimiter='\t')  # Load tab-separated text file
+            # Adjust delimiter='\t' for tab-delimited file
+            data = pd.read_csv(file_path, delimiter='\t')
             print("Dataset preview:\n", data.head())
             print("Columns in dataset:\n", list(data.columns))
         except Exception as e:
             raise ValueError(f"Failed to read file {file_path}. Error: {e}")
 
-        # Directly select XYZ and features based on column positions
+        # Select XYZ (columns 0-2) and features (columns 6-8)
         try:
-            # Assuming columns 0-2 are XYZ and columns 6-8 are the features
-            self.xyz = data.iloc[:, 0:3].values.astype(np.float64)  # Columns 0, 1, 2 -> X, Y, Z
-            self.features = data.iloc[:, 6:9].values.astype(np.float64)  # Columns 6, 7, 8 -> Reflectance, NumberOfReturns, ReturnNumber
+            self.xyz = data.iloc[:, 0:3].values.astype(np.float64)  # X, Y, Z
+            self.features = data.iloc[:, 6:9].values.astype(np.float64)  # Reflectance, NumberOfReturns, ReturnNumber
         except IndexError as e:
-            raise ValueError(f"Error in column selection. Check column indexing: {e}")
+            raise ValueError(f"Error in selecting columns. Check file format: {e}")
 
-        # Debug selected features
-        print("Selected feature columns:\n", data.iloc[:, 6:9].head())
-        print("Feature shape after extraction:", self.features.shape)
+        # Debug column extraction
+        print("XYZ Shape:", self.xyz.shape)
+        print("Feature Shape:", self.features.shape)
 
         # Normalize XYZ
         self.xyz_mean = np.mean(self.xyz, axis=0).astype(np.float64)
@@ -68,7 +68,7 @@ class PointCloudDataset(Dataset):
 def load_model(model_path, input_dim, output_dim):
     model = PointNet2ClsSSG(in_dim=input_dim, out_dim=output_dim)
     try:
-        state_dict = torch.load(model_path, map_location='cpu', weights_only=True)
+        state_dict = torch.load(model_path, map_location='cpu')
         model.load_state_dict(state_dict, strict=False)
         print("Model loaded successfully.")
     except Exception as e:
@@ -120,7 +120,7 @@ def predict_point_cloud(test_file, model_path, output_file):
 
 
 if __name__ == "__main__":
-    test_file = '/content/drive/MyDrive/t1/Mar18_test.txt'  # Adjust to your file
+    test_file = '/content/drive/MyDrive/t1/Mar18_test.txt'
     model_path = '/content/drive/MyDrive/t1/checkpoints/pointnet_epoch_7.pth'
     output_file = '/content/drive/MyDrive/t1/Mar18_testWithoutRGB_predictions.txt'
 
