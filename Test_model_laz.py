@@ -1,18 +1,20 @@
 import numpy as np
 import torch
-import laspy
+import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 from pointnet_ import PointNet2ClsSSG
-import pandas as pd
+
 
 class PointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
         try:
-            sample_data = pd.read_csv(file_path, delimiter='\t', nrows=5)  # Read first 5 rows
+            # Inspect the first few rows to determine column names
+            sample_data = pd.read_csv(file_path, delimiter='\t', nrows=5)
             print("Column names in the dataset:", list(sample_data.columns))
         except Exception as e:
             raise ValueError(f"Failed to read file {file_path} or inspect columns. Error: {e}")
 
+        # Define required columns
         required_columns = ['X', 'Y', 'Z', 'Reflectance', 'NumberOfReturns', 'ReturnNumber']
 
         # Map required columns to available ones
@@ -27,19 +29,19 @@ class PointCloudDataset(Dataset):
 
         print("Mapped column names:", column_mapping)
 
-        # Load full dataset
+        # Load the full dataset
         print("Loading full dataset...")
         data = pd.read_csv(file_path, delimiter='\t')
 
         # Extract XYZ and features
         self.xyz = data[[column_mapping['X'], column_mapping['Y'], column_mapping['Z']]].values.astype(np.float64)
-        self.features = data[
-            [column_mapping['Reflectance'], column_mapping['NumberOfReturns'], column_mapping['ReturnNumber']]
-        ].values.astype(np.float64)
+        try:
+            self.features = data[
+                [column_mapping['Reflectance'], column_mapping['NumberOfReturns'], column_mapping['ReturnNumber']]
+            ].values.astype(np.float64)
+        except KeyError as e:
+            raise ValueError(f"Error extracting features. Check column mapping: {e}")
 
-        # Debug feature selection
-        print("Selected feature columns (Reflectance, NumberOfReturns, ReturnNumber):")
-        print(data[[column_mapping['Reflectance'], column_mapping['NumberOfReturns'], column_mapping['ReturnNumber']]].head())
         print("Feature shape after extraction:", self.features.shape)
 
         # Normalize XYZ and features
@@ -81,64 +83,60 @@ class PointCloudDataset(Dataset):
 def load_model(model_path, input_dim, output_dim):
     model = PointNet2ClsSSG(in_dim=input_dim, out_dim=output_dim)
     try:
-        state_dict = torch.load(model_path, map_location='cpu', weights_only=True)
+        state_dict = torch.load(model_path, map_location='cpu')
         model.load_state_dict(state_dict, strict=False)
         print("Model loaded successfully.")
     except Exception as e:
         print(f"Error loading model: {e}. Initializing model from scratch.")
     return model
 
+
 def predict_point_cloud(test_file, model_path, output_file):
-    # Load the test dataset
+    # Load the dataset
     test_dataset = PointCloudDataset(test_file, points_per_cloud=1024, debug=True)
 
+    # Get input dimensions
+    input_dim = test_dataset.features.shape[1] + 3  # Add 3 for XYZ
+    print(f"Input dimension for the model: {input_dim}")
+
     # Load the model
-    input_dim = test_dataset.features.shape[1]  # Number of feature channels
-    model = load_model(model_path, input_dim=input_dim, output_dim=11)  # Adjust output_dim based on your classes
+    model = load_model(model_path, input_dim=input_dim, output_dim=11)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print(f"Using device: {device}")
     model.to(device)
     model.eval()
 
     # DataLoader
-    print("CUDA Available:", torch.cuda.is_available())
     test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
 
     # Predictions
     all_predictions = []
     with torch.no_grad():
         for features, xyz in test_loader:
-            # Move tensors to device
-            features, xyz = features.to(device, dtype=torch.float32), xyz.to(device, dtype=torch.float32)
-            
-            # Pass through the model
-            logits = model(features, xyz)  # Output logits
-            predictions = torch.argmax(logits, dim=1)  # Class predictions
+            features, xyz = features.to(device), xyz.to(device)
+            logits = model(features, xyz)
+            predictions = torch.argmax(logits, dim=1)
             all_predictions.extend(predictions.cpu().numpy())
 
     # Save predictions
     point_cloud_predictions = np.array(all_predictions).reshape(-1, 1).astype(np.float64)
     denormalized_xyz = (test_dataset.xyz[:len(point_cloud_predictions) * test_dataset.points_per_cloud]
                         + test_dataset.xyz_mean).astype(np.float64)
-
-    # Determine feature names dynamically
-    feature_columns = ['Intensity', 'ReturnNumber', 'NumberOfReturns']
-    
+    feature_columns = ['Reflectance', 'NumberOfReturns', 'ReturnNumber']
     augmented_data = np.hstack([
         denormalized_xyz,
         test_dataset.features[:len(point_cloud_predictions) * test_dataset.points_per_cloud],
         np.repeat(point_cloud_predictions, test_dataset.points_per_cloud, axis=0)
     ])
-
-    # Save results
     np.savetxt(output_file, augmented_data, delimiter='\t', fmt='%.15f',
-               header='\t'.join(['X', 'Y', 'Z'] + feature_columns + ['Classification']), 
+               header='\t'.join(['X', 'Y', 'Z'] + feature_columns + ['Classification']),
                comments='')
     print(f"Predictions saved to {output_file}")
 
+
 if __name__ == "__main__":
-    # File paths
     test_file = '/content/drive/MyDrive/t1/Mar18_test.txt'
     model_path = '/content/drive/MyDrive/t1/checkpoints/pointnet_epoch_7.pth'
-    output_file = '/content/drive/MyDrive/t1/Mar18_test_predictions.txt'
+    output_file = '/content/drive/MyDrive/t1/Mar18_testWithoutRGB_predictions.txt'
 
     predict_point_cloud(test_file, model_path, output_file)
