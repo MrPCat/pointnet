@@ -7,7 +7,6 @@ from pointnet_ import PointNet2ClsSSG
 
 class PointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
-        # Load the dataset
         try:
             data = pd.read_csv(file_path, delimiter='\t')
             print("Dataset preview:\n", data.head())
@@ -15,7 +14,7 @@ class PointCloudDataset(Dataset):
         except Exception as e:
             raise ValueError(f"Failed to read file {file_path}. Error: {e}")
 
-        # Extract XYZ (columns 0-2) and features (columns 6-8)
+        # Extract XYZ and features
         try:
             self.xyz = data.iloc[:, 0:3].values.astype(np.float64)  # Columns 0, 1, 2 -> X, Y, Z
             self.features = data.iloc[:, 6:9].values.astype(np.float64)  # Columns 6, 7, 8 -> Reflectance, NumberOfReturns, ReturnNumber
@@ -24,7 +23,8 @@ class PointCloudDataset(Dataset):
 
         # Debug extracted data
         print("XYZ Shape:", self.xyz.shape)
-        print("Feature Shape:", self.features.shape)
+        print("Selected feature columns (6:9):\n", data.iloc[:, 6:9].head())
+        print("Feature shape after extraction (should be 3):", self.features.shape)
 
         # Normalize XYZ
         self.xyz_mean = np.mean(self.xyz, axis=0).astype(np.float64)
@@ -70,8 +70,8 @@ def load_model(model_path, input_dim, output_dim):
         state_dict = torch.load(model_path, map_location='cpu')
         model.load_state_dict(state_dict, strict=False)
         print("Model loaded successfully.")
-    except Exception as e:
-        print(f"Error loading model: {e}. Initializing model from scratch.")
+    except FileNotFoundError:
+        print(f"Model checkpoint not found at {model_path}. Initializing model from scratch.")
     return model
 
 
@@ -120,7 +120,7 @@ def predict_point_cloud(test_file, model_path, output_file):
 
 if __name__ == "__main__":
     test_file = '/content/drive/MyDrive/t1/Mar18_test.txt'
-    model_path = '/content/drive/MyDrive/t1/checkpoints/pointnet_epoch_7.pth'
+    model_path = '/content/drive/MyDrive/t1/checkpoints/pointnet_model.pth'
     output_file = '/content/drive/MyDrive/t1/Mar18_testWithoutRGB_predictions.txt'
 
     predict_point_cloud(test_file, model_path, output_file)
