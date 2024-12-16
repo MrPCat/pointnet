@@ -4,21 +4,28 @@ import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 from pointnet_ import PointNet2ClsSSG
 
+
 class PointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
         # Load the dataset
         try:
             data = pd.read_csv(file_path, delimiter='\t')
-            print("Column names in the dataset:", list(data.columns))
+            print("Dataset preview:\n", data.head())
+            print("Columns in dataset:\n", list(data.columns))
         except Exception as e:
             raise ValueError(f"Failed to read file {file_path}. Error: {e}")
 
         # Directly select XYZ and features based on column positions
-        # Assuming columns 0-2 are XYZ and columns 6-9 are the features
-        self.xyz = data.iloc[:, 0:3].values.astype(np.float64)  # Columns 0, 1, 2 -> X, Y, Z
-        self.features = data.iloc[:, 6:9].values.astype(np.float64)  # Columns 6, 7, 8 -> Reflectance, NumberOfReturns, ReturnNumber
+        try:
+            # Assuming columns 0-2 are XYZ and columns 6-8 are the features
+            self.xyz = data.iloc[:, 0:3].values.astype(np.float64)  # Columns 0, 1, 2 -> X, Y, Z
+            self.features = data.iloc[:, 6:9].values.astype(np.float64)  # Columns 6, 7, 8 -> Reflectance, NumberOfReturns, ReturnNumber
+        except IndexError as e:
+            raise ValueError(f"Error in column selection. Check column indexing: {e}")
 
-        print(f"Feature shape after extraction: {self.features.shape}")
+        # Debug selected features
+        print("Selected feature columns:\n", data.iloc[:, 6:9].head())
+        print("Feature shape after extraction:", self.features.shape)
 
         # Normalize XYZ
         self.xyz_mean = np.mean(self.xyz, axis=0).astype(np.float64)
@@ -58,11 +65,10 @@ class PointCloudDataset(Dataset):
         return features, xyz
 
 
-
 def load_model(model_path, input_dim, output_dim):
     model = PointNet2ClsSSG(in_dim=input_dim, out_dim=output_dim)
     try:
-        state_dict = torch.load(model_path, map_location='cpu')
+        state_dict = torch.load(model_path, map_location='cpu', weights_only=True)
         model.load_state_dict(state_dict, strict=False)
         print("Model loaded successfully.")
     except Exception as e:
