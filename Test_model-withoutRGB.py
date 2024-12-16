@@ -4,36 +4,43 @@ import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 from pointnet_ import PointNet2ClsSSG
 
+import laspy
+import numpy as np
+import torch
+from torch.utils.data import Dataset
+
 class PointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
-        # Load the dataset using pandas
-        data = pd.read_csv(file_path, delimiter='\t', dtype=np.float64)
-        
-        # Extract XYZ coordinates
-        self.xyz = data[['X', 'Y', 'Z']].values.astype(np.float64)
-        
-        # Extract additional features (excluding RGB)
-        feature_columns = ['Reflectance', 'NumberOfReturns', 'ReturnNumber']
-        self.features = data[feature_columns].values.astype(np.float64)
-        
-        # Save the mean for denormalization later
-        self.xyz_mean = np.mean(self.xyz, axis=0).astype(np.float64)
-        
+        try:
+            # Load LAS file
+            las = laspy.read(file_path)
+
+            # Extract XYZ
+            self.xyz = np.column_stack([las.x, las.y, las.z])
+            
+            # Extract features based on available dimensions
+            intensity = las.intensity / np.max(las.intensity)
+            num_returns = las.num_returns / np.max(las.num_returns)
+            return_num = las.return_num / np.max(las.return_num)
+            
+            # Combine features
+            self.features = np.column_stack([intensity, num_returns, return_num])
+            
+        except Exception as e:
+            print(f"Error reading file {file_path}: {e}")
+            raise
+
         # Normalize XYZ
+        self.xyz_mean = np.mean(self.xyz, axis=0, dtype=np.float64)
         self.xyz -= self.xyz_mean
-        
-        # Normalize features
-        self.features = (self.features - np.mean(self.features, axis=0)) / np.std(self.features, axis=0)
-        
+
         # Ensure data is divisible by points_per_cloud
         self.points_per_cloud = points_per_cloud
         self.num_clouds = len(self.xyz) // self.points_per_cloud
-        
-        # Truncate or pad to ensure exact division
-        if len(self.xyz) % self.points_per_cloud != 0:
-            self.xyz = self.xyz[:self.num_clouds * self.points_per_cloud]
-            self.features = self.features[:self.num_clouds * self.points_per_cloud]
-        
+
+        self.xyz = self.xyz[:self.num_clouds * self.points_per_cloud]
+        self.features = self.features[:self.num_clouds * self.points_per_cloud]
+
         if debug:
             self.print_debug_info()
 
@@ -45,7 +52,7 @@ class PointCloudDataset(Dataset):
         print(f"XYZ Shape: {self.xyz.shape}")
         print(f"Features Shape: {self.features.shape}")
         print(f"XYZ Mean: {self.xyz_mean}")
-    
+
     def __len__(self):
         return self.num_clouds
 
@@ -53,15 +60,14 @@ class PointCloudDataset(Dataset):
         start = idx * self.points_per_cloud
         end = start + self.points_per_cloud
 
-        # Convert XYZ and features to float32 tensors
-        xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32)  # [points_per_cloud, 3]
-        features = torch.tensor(self.features[start:end], dtype=torch.float32)  # [points_per_cloud, feature_dim]
+        xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32)
+        features = torch.tensor(self.features[start:end], dtype=torch.float32)
 
-        # Transpose to match PointNet2 expected input
-        xyz = xyz.transpose(0, 1)  # [3, points_per_cloud]
-        features = features.transpose(0, 1)  # [feature_dim, points_per_cloud]
+        xyz = xyz.transpose(0, 1)
+        features = features.transpose(0, 1)
 
         return features, xyz
+
 
 def load_model(model_path, input_dim, output_dim):
     model = PointNet2ClsSSG(in_dim=input_dim, out_dim=output_dim)
