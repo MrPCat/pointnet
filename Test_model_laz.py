@@ -7,23 +7,22 @@ from pointnet_ import PointNet2ClsSSG
 
 class PointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
-        # Load the text file
+        # Load the dataset
         try:
-            # Adjust delimiter='\t' for tab-delimited file
             data = pd.read_csv(file_path, delimiter='\t')
             print("Dataset preview:\n", data.head())
             print("Columns in dataset:\n", list(data.columns))
         except Exception as e:
             raise ValueError(f"Failed to read file {file_path}. Error: {e}")
 
-        # Select XYZ (columns 0-2) and features (columns 6-8)
+        # Extract XYZ (columns 0-2) and features (columns 6-8)
         try:
-            self.xyz = data.iloc[:, 0:3].values.astype(np.float64)  # X, Y, Z
-            self.features = data.iloc[:, 6:9].values.astype(np.float64)  # Reflectance, NumberOfReturns, ReturnNumber
+            self.xyz = data.iloc[:, 0:3].values.astype(np.float64)  # Columns 0, 1, 2 -> X, Y, Z
+            self.features = data.iloc[:, 6:9].values.astype(np.float64)  # Columns 6, 7, 8 -> Reflectance, NumberOfReturns, ReturnNumber
         except IndexError as e:
             raise ValueError(f"Error in selecting columns. Check file format: {e}")
 
-        # Debug column extraction
+        # Debug extracted data
         print("XYZ Shape:", self.xyz.shape)
         print("Feature Shape:", self.features.shape)
 
