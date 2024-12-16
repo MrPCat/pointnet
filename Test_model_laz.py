@@ -8,7 +8,6 @@ import pandas as pd
 class PointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
         try:
-            # Inspect column names
             sample_data = pd.read_csv(file_path, delimiter='\t', nrows=5)  # Read first 5 rows
             print("Column names in the dataset:", list(sample_data.columns))
         except Exception as e:
@@ -20,25 +19,28 @@ class PointCloudDataset(Dataset):
         column_mapping = {}
         for col in required_columns:
             for available_col in sample_data.columns:
-                if col.lower() in available_col.lower():  # Case-insensitive matching
+                if col.lower() in available_col.lower():
                     column_mapping[col] = available_col
                     break
             if col not in column_mapping:
                 raise ValueError(f"Missing required column: {col}. Available columns: {list(sample_data.columns)}")
 
-        print("Mapped column names:", column_mapping)  # Debug print for column mappings
+        print("Mapped column names:", column_mapping)
 
-        # Load full dataset with chunks
-        print("Loading dataset in chunks...")
-        chunks = pd.read_csv(file_path, delimiter='\t', chunksize=10000)
-        data = pd.concat(chunks, ignore_index=True)
-        print("Dataset loaded successfully. Shape:", data.shape)
+        # Load full dataset
+        print("Loading full dataset...")
+        data = pd.read_csv(file_path, delimiter='\t')
 
         # Extract XYZ and features
         self.xyz = data[[column_mapping['X'], column_mapping['Y'], column_mapping['Z']]].values.astype(np.float64)
         self.features = data[
             [column_mapping['Reflectance'], column_mapping['NumberOfReturns'], column_mapping['ReturnNumber']]
         ].values.astype(np.float64)
+
+        # Debug feature selection
+        print("Selected feature columns (Reflectance, NumberOfReturns, ReturnNumber):")
+        print(data[[column_mapping['Reflectance'], column_mapping['NumberOfReturns'], column_mapping['ReturnNumber']]].head())
+        print("Feature shape after extraction:", self.features.shape)
 
         # Normalize XYZ and features
         self.xyz_mean = np.mean(self.xyz, axis=0).astype(np.float64)
@@ -74,6 +76,7 @@ class PointCloudDataset(Dataset):
         xyz = xyz.transpose(0, 1)
         features = features.transpose(0, 1)
         return features, xyz
+
 
 def load_model(model_path, input_dim, output_dim):
     model = PointNet2ClsSSG(in_dim=input_dim, out_dim=output_dim)
