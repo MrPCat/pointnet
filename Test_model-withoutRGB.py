@@ -3,11 +3,8 @@ import torch
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 from pointnet_ import PointNet2ClsSSG
-
 import laspy
-import numpy as np
-import torch
-from torch.utils.data import Dataset
+
 
 class PointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
