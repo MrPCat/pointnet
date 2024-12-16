@@ -9,7 +9,7 @@ from pointnet_ import PointNet2ClsSSG
 import logging
 
 # === Configure Logging ===
-log_file_path = "/content/drive/MyDrive/t1/training_logs.txt"
+log_file_path = r"C:\Farshid\Uni\Semesters\Thesis\Data\training_logs.txt"
 logging.basicConfig(filename=log_file_path, level=logging.INFO, format='%(asctime)s - %(message)s')
 
 def log_and_print(message):
@@ -131,7 +131,6 @@ def test_model(model, test_loader, device):
     log_and_print(f"Test Accuracy: {accuracy:.2f}%")
     print(f"Test Accuracy: {accuracy:.2f}%")            
 
-#"__main__"
 if __name__ == "__main__":
 
     # Check GPU Availability
@@ -140,9 +139,9 @@ if __name__ == "__main__":
     print("Using device:", device)
     
     # Specify File Paths
-    train_file = '/content/drive/MyDrive/t1/Mar18_train.txt'
-    val_file = '/content/drive/MyDrive/t1/Mar18_val.txt'
-    test_file = '/content/drive/MyDrive/t1/Mar18_test.txt'
+    train_file = r"C:\Farshid\Uni\Semesters\Thesis\Data\Epoch_March2018\LiDAR\Mar18_train.txt"
+    val_file = r"C:\Farshid\Uni\Semesters\Thesis\Data\Epoch_March2018\LiDAR\Mar18_val.txt"
+    test_file = r"C:\Farshid\Uni\Semesters\Thesis\Data\Epoch_March2018\LiDAR\Mar18_test.txt"
 
     # Dataset and DataLoader
     batch_size = 16
@@ -155,8 +154,11 @@ if __name__ == "__main__":
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     # Model, Optimizer, and Loss Function
-    in_dim = train_dataset.features.shape[1]
+    in_dim = train_dataset.features.shape[1]  # Extract feature dimensions
     num_classes = len(np.unique(train_dataset.labels))
+
+    # Print overall input dimension (in_dim + XYZ)
+    print(f"Overall input dimension for the model: {in_dim + 3} (Features: {in_dim}, XYZ: 3)")
 
     model = PointNet2ClsSSG(in_dim=in_dim, out_dim=num_classes, downsample_points=(512, 128))
     optimizer = optim.Adam(model.parameters(), lr=0.001)
@@ -164,17 +166,15 @@ if __name__ == "__main__":
     epochs = 10
 
     # Directory for saving checkpoints
-    save_dir = "/content/drive/MyDrive/t1/checkpoints"
+    save_dir = r"C:\Farshid\Uni\Semesters\Thesis\Data"
     os.makedirs(save_dir, exist_ok=True)
 
     # Training with Validation
     log_and_print("Starting training...")
     train_model(model, train_loader, val_loader, optimizer, criterion, epochs, device, save_dir)
 
-
-
     # Save the trained model
-    model_path = "/content/drive/MyDrive/t1/pointnet_model.pth"
+    model_path = r"C:\Farshid\Uni\Semesters\Thesis\Data\pointnet_model.pth"
     torch.save(model.state_dict(), model_path)
     log_and_print(f"Model saved to {model_path}")
     print("Model saved to pointnet_model.pth")

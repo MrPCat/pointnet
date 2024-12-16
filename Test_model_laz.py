@@ -120,8 +120,8 @@ def predict_point_cloud(test_file, model_path, output_file):
 
 
 if __name__ == "__main__":
-    test_file = '/content/drive/MyDrive/t1/Mar18_test.txt'  # Replace with your .txt file path
-    model_path = '/content/drive/MyDrive/t1/checkpoints/pointnet_model.pth'
-    output_file = '/content/drive/MyDrive/t1/Mar18_testWithoutRGB_predictions.txt'
+    test_file = r"C:\Farshid\Uni\Semesters\Thesis\Data\Epoch_March2018\LiDAR\Mar18_test.txt" # Replace with your .txt file path
+    model_path = r"C:\Users\faars\Downloads\pointnet_epoch_7.pth"
+    output_file = r'C:\Users\faars\Downloads\Mar18_testWithoutRGB_predictions.txt'
 
     predict_point_cloud(test_file, model_path, output_file)
