@@ -1,25 +1,20 @@
 import numpy as np
 import torch
-import laspy
+import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 from pointnet_ import PointNet2ClsSSG
-import pandas as pd
 
 class PointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
-        # Use laspy to read .las file
-        las = laspy.read(file_path)
+        # Load the dataset using pandas
+        data = pd.read_csv(file_path, delimiter='\t', dtype=np.float64)
         
         # Extract XYZ coordinates
-        self.xyz = np.column_stack([las.x, las.y, las.z]).astype(np.float64)
+        self.xyz = data[['X', 'Y', 'Z']].values.astype(np.float64)
         
-        # Extract additional point cloud features (non-RGB)
-        self.features = np.column_stack([
-            las.intensity,  # Intensity
-            las.return_number,  # Return number
-            las.number_of_returns,  # Number of returns
-            # Add any other non-color features you want to include
-        ]).astype(np.float64)
+        # Extract additional features (excluding XYZ)
+        feature_columns = ['Reflectance', 'NumberOfReturns', 'ReturnNumber']
+        self.features = data[feature_columns].values.astype(np.float64)
         
         # Save the mean for denormalization later
         self.xyz_mean = np.mean(self.xyz, axis=0).astype(np.float64)
@@ -111,7 +106,7 @@ def predict_point_cloud(test_file, model_path, output_file):
                         + test_dataset.xyz_mean).astype(np.float64)
 
     # Determine feature names dynamically
-    feature_columns = ['Intensity', 'ReturnNumber', 'NumberOfReturns']
+    feature_columns = ['Reflectance', 'NumberOfReturns', 'ReturnNumber']
     
     augmented_data = np.hstack([
         denormalized_xyz,

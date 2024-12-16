@@ -1,62 +1,44 @@
-import laspy
 import numpy as np
 import torch
+import laspy
 from torch.utils.data import Dataset, DataLoader
-from pointnet_ import PointNet2ClsSSG  # Adjust this import to your model's structure
+from pointnet_ import PointNet2ClsSSG
+import pandas as pd
 
-def process_nrw_laz_with_9_features(file_path):
-    las = laspy.read(file_path)
-
-    # Define class mapping for top 2 classes
-    class_mapping = {
-        2: 0,  # Ground points (Bodenpunkte)
-        20: 1,  # Last return non-ground
-    }
-
-    # Map classifications to indices
-    mapped_classes = np.array([class_mapping.get(cls, -1) for cls in las.classification])
-
-    # One-hot encode the 2 prioritized classes
-    one_hot_classes = np.zeros((len(mapped_classes), 2))
-    one_hot_classes[:, 0] = (mapped_classes == 0).astype(float)  # Class 2
-    one_hot_classes[:, 1] = (mapped_classes == 1).astype(float)  # Class 20
-
-    # Filter out invalid classes (-1) if desired
-    valid_mask = mapped_classes != -1
-    filtered_xyz = np.column_stack([las.x[valid_mask], las.y[valid_mask], las.z[valid_mask]])
-    filtered_intensity = las.intensity[valid_mask]
-    filtered_num_returns = las.num_returns[valid_mask]
-    filtered_return_num = las.return_num[valid_mask]
-    one_hot_classes = one_hot_classes[valid_mask]
-
-    # Add synthetic feature: normalized height
-    normalized_height = (filtered_xyz[:, 2] - np.min(filtered_xyz[:, 2])) / (
-        np.max(filtered_xyz[:, 2]) - np.min(filtered_xyz[:, 2])
-    )
-
-    # Combine features into a 9-dimensional feature set
-    data = np.column_stack([
-        filtered_xyz,                               # XYZ coordinates (3 features)
-        filtered_intensity / np.max(filtered_intensity) * 255,  # Intensity (1 feature)
-        filtered_num_returns / np.max(filtered_num_returns),    # Number of returns (1 feature)
-        filtered_return_num / np.max(filtered_return_num),      # Return number (1 feature)
-        one_hot_classes,                          # One-hot-encoded classes (2 features)
-        normalized_height                         # Normalized height (1 feature)
-    ])
-
-    return data
-
-class PointCloudDatasetNRW(Dataset):
+class PointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
-        self.data = process_nrw_laz_with_9_features(file_path)
-        self.xyz = self.data[:, :3].astype(np.float64)  # XYZ coordinates
-        self.features = self.data[:, 3:].astype(np.float32)  # Other features
-        self.xyz_mean = np.mean(self.xyz, axis=0, dtype=np.float64)
+        # Use laspy to read .las file
+        las = laspy.read(file_path)
+        
+        # Extract XYZ coordinates
+        self.xyz = np.column_stack([las.x, las.y, las.z]).astype(np.float64)
+        
+        # Extract additional point cloud features (non-RGB)
+        self.features = np.column_stack([
+            las.intensity,  # Intensity
+            las.return_number,  # Return number
+            las.number_of_returns,  # Number of returns
+            # Add any other non-color features you want to include
+        ]).astype(np.float64)
+        
+        # Save the mean for denormalization later
+        self.xyz_mean = np.mean(self.xyz, axis=0).astype(np.float64)
+        
+        # Normalize XYZ
         self.xyz -= self.xyz_mean
+        
+        # Normalize features
+        self.features = (self.features - np.mean(self.features, axis=0)) / np.std(self.features, axis=0)
+        
+        # Ensure data is divisible by points_per_cloud
         self.points_per_cloud = points_per_cloud
         self.num_clouds = len(self.xyz) // self.points_per_cloud
-        self.xyz = self.xyz[:self.num_clouds * self.points_per_cloud]
-        self.features = self.features[:self.num_clouds * self.points_per_cloud]
+        
+        # Truncate or pad to ensure exact division
+        if len(self.xyz) % self.points_per_cloud != 0:
+            self.xyz = self.xyz[:self.num_clouds * self.points_per_cloud]
+            self.features = self.features[:self.num_clouds * self.points_per_cloud]
+        
         if debug:
             self.print_debug_info()
 
@@ -67,6 +49,7 @@ class PointCloudDatasetNRW(Dataset):
         print(f"Number of Point Clouds: {self.num_clouds}")
         print(f"XYZ Shape: {self.xyz.shape}")
         print(f"Features Shape: {self.features.shape}")
+        print(f"XYZ Mean: {self.xyz_mean}")
     
     def __len__(self):
         return self.num_clouds
@@ -74,38 +57,34 @@ class PointCloudDatasetNRW(Dataset):
     def __getitem__(self, idx):
         start = idx * self.points_per_cloud
         end = start + self.points_per_cloud
-        xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32)
-        features = torch.tensor(self.features[start:end], dtype=torch.float32)
-        xyz = xyz.transpose(0, 1)
-        features = features.transpose(0, 1)
+
+        # Convert XYZ and features to float32 tensors
+        xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32)  # [points_per_cloud, 3]
+        features = torch.tensor(self.features[start:end], dtype=torch.float32)  # [points_per_cloud, feature_dim]
+
+        # Transpose to match PointNet2 expected input
+        xyz = xyz.transpose(0, 1)  # [3, points_per_cloud]
+        features = features.transpose(0, 1)  # [feature_dim, points_per_cloud]
+
         return features, xyz
 
-
-# Load Model
 def load_model(model_path, input_dim, output_dim):
     model = PointNet2ClsSSG(in_dim=input_dim, out_dim=output_dim)
     try:
-        state_dict = torch.load(model_path, map_location='cpu')
+        state_dict = torch.load(model_path, map_location='cpu', weights_only=True)
         model.load_state_dict(state_dict, strict=False)
         print("Model loaded successfully.")
     except Exception as e:
         print(f"Error loading model: {e}. Initializing model from scratch.")
     return model
 
-# Main Function
-if __name__ == "__main__":
-    # File paths
-    test_file = r'/content/drive/MyDrive/t1/3dm_32_280_5652_1_nw.laz'
-    model_path = r'/content/drive/MyDrive/t1/checkpoints/pointnet_model.pth'
-    output_file = r'/content/drive/MyDrive/t1/3dm_32_280_5652_1_nw_predictions.txt'
-
+def predict_point_cloud(test_file, model_path, output_file):
     # Load the test dataset
-    test_dataset = PointCloudDatasetNRW(test_file, points_per_cloud=1024, debug=True)
+    test_dataset = PointCloudDataset(test_file, points_per_cloud=1024, debug=True)
 
     # Load the model
-    input_dim = test_dataset.features.shape[1]
-    output_dim = 11  # Adjust based on your number of classes
-    model = load_model(model_path, input_dim=input_dim, output_dim=output_dim)
+    input_dim = test_dataset.features.shape[1]  # Number of feature channels
+    model = load_model(model_path, input_dim=input_dim, output_dim=11)  # Adjust output_dim based on your classes
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model.to(device)
     model.eval()
@@ -118,9 +97,12 @@ if __name__ == "__main__":
     all_predictions = []
     with torch.no_grad():
         for features, xyz in test_loader:
-            features, xyz = features.to(device), xyz.to(device)
-            logits = model(features, xyz)
-            predictions = torch.argmax(logits, dim=1)
+            # Move tensors to device
+            features, xyz = features.to(device, dtype=torch.float32), xyz.to(device, dtype=torch.float32)
+            
+            # Pass through the model
+            logits = model(features, xyz)  # Output logits
+            predictions = torch.argmax(logits, dim=1)  # Class predictions
             all_predictions.extend(predictions.cpu().numpy())
 
     # Save predictions
@@ -128,13 +110,25 @@ if __name__ == "__main__":
     denormalized_xyz = (test_dataset.xyz[:len(point_cloud_predictions) * test_dataset.points_per_cloud]
                         + test_dataset.xyz_mean).astype(np.float64)
 
+    # Determine feature names dynamically
+    feature_columns = ['Intensity', 'ReturnNumber', 'NumberOfReturns']
+    
     augmented_data = np.hstack([
         denormalized_xyz,
         test_dataset.features[:len(point_cloud_predictions) * test_dataset.points_per_cloud],
         np.repeat(point_cloud_predictions, test_dataset.points_per_cloud, axis=0)
     ])
 
+    # Save results
     np.savetxt(output_file, augmented_data, delimiter='\t', fmt='%.15f',
-               header='X\tY\tZ\tIntensity\tNumReturns\tReturnNum\tClass1\tClass2\tHeight\tPrediction', comments='')
+               header='\t'.join(['X', 'Y', 'Z'] + feature_columns + ['Classification']), 
+               comments='')
     print(f"Predictions saved to {output_file}")
 
+if __name__ == "__main__":
+    # File paths
+    test_file = '/content/drive/MyDrive/t1/Mar18_test_GroundTruth.las'
+    model_path = '/content/drive/MyDrive/t1/checkpoints/pointnet_epoch_7.pth'
+    output_file = '/content/drive/MyDrive/t1/3dm_32_280_5652_1_nw_predictions.txt'
+
+    predict_point_cloud(test_file, model_path, output_file)
