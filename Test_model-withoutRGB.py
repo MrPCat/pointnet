@@ -5,23 +5,37 @@ from torch.utils.data import Dataset, DataLoader
 from pointnet_ import PointNet2ClsSSG
 
 
+import pandas as pd
+import numpy as np
+import torch
+from torch.utils.data import Dataset
+
+
 class PointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
-        # Load the dataset as a text file using pandas
+        # Read the first few rows to inspect column names
         try:
-            data = pd.read_csv(file_path, delimiter='\t')  # Read tab-separated file
+            sample_data = pd.read_csv(file_path, delimiter='\t', nrows=5)  # Read first 5 rows
+            print("Column names in the dataset:", list(sample_data.columns))
         except Exception as e:
-            raise ValueError(f"Failed to read file {file_path}. Ensure it is a valid tab-delimited text file.") from e
-        
+            raise ValueError(f"Failed to read file {file_path} or inspect columns. Error: {e}")
+
+        # Define expected columns
+        required_columns = ['X', 'Y', 'Z', 'Reflectance', 'NumberOfReturns', 'ReturnNumber']
+
+        # Check if all required columns are present
+        missing_columns = [col for col in required_columns if col not in sample_data.columns]
+        if missing_columns:
+            raise ValueError(f"Missing required columns: {missing_columns}. Available columns: {list(sample_data.columns)}")
+
+        # Load the full dataset
+        data = pd.read_csv(file_path, delimiter='\t')
+
         # Extract XYZ coordinates
         self.xyz = data[['X', 'Y', 'Z']].values.astype(np.float64)
 
-        # Extract additional features (ensure these columns exist)
-        feature_columns = ['Reflectance', 'NumberOfReturns', 'ReturnNumber']
-        try:
-            self.features = data[feature_columns].values.astype(np.float64)
-        except KeyError as e:
-            raise ValueError(f"Missing required feature columns in the file: {e}")
+        # Extract additional features
+        self.features = data[['Reflectance', 'NumberOfReturns', 'ReturnNumber']].values.astype(np.float64)
 
         # Save the mean for denormalization later
         self.xyz_mean = np.mean(self.xyz, axis=0).astype(np.float64)
@@ -58,15 +72,14 @@ class PointCloudDataset(Dataset):
         start = idx * self.points_per_cloud
         end = start + self.points_per_cloud
 
-        # Convert XYZ and features to float32 tensors
-        xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32)  # [points_per_cloud, 3]
-        features = torch.tensor(self.features[start:end], dtype=torch.float32)  # [points_per_cloud, feature_dim]
+        xyz = torch.tensor(self.xyz[start:end], dtype=torch.float32)
+        features = torch.tensor(self.features[start:end], dtype=torch.float32)
 
-        # Transpose to match PointNet2 expected input
-        xyz = xyz.transpose(0, 1)  # [3, points_per_cloud]
-        features = features.transpose(0, 1)  # [feature_dim, points_per_cloud]
+        xyz = xyz.transpose(0, 1)
+        features = features.transpose(0, 1)
 
         return features, xyz
+
 
 
 def load_model(model_path, input_dim, output_dim):
