@@ -19,11 +19,19 @@ class PointCloudDataset(Dataset):
         column_mapping = {}
         for col in required_columns:
             for available_col in sample_data.columns:
-                if col.lower() in available_col.lower() or available_col.startswith('//'):
+                if col.lower() in available_col.lower():
                     column_mapping[col] = available_col
                     break
             if col not in column_mapping:
                 raise ValueError(f"Missing required column: {col}. Available columns: {list(sample_data.columns)}")
+
+        # Manually adjust mappings if needed
+        column_mapping['X'] = '//X'  # If '//' prefix is specific to X column
+        column_mapping['Y'] = 'Y'
+        column_mapping['Z'] = 'Z'
+        column_mapping['Reflectance'] = 'Reflectance'
+        column_mapping['NumberOfReturns'] = 'NumberOfReturns'
+        column_mapping['ReturnNumber'] = 'ReturnNumber'
 
         print("Mapped column names:", column_mapping)  # Debug print for column mappings
 
