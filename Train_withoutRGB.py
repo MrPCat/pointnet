@@ -24,7 +24,7 @@ class PointCloudDataset(Dataset):
 
         # Split into xyz, features, and labels
         self.xyz = self.data[:, :3]  # First 3 columns are X, Y, Z
-        self.features = self.data[:, 6:-1]  # Columns 4 to second last are features
+        self.features = self.data[:, 3:-1]  # Columns 4 to second last are features
         self.labels = self.data[:, -1]  # Last column is Classification
 
         # Normalize spatial coordinates
