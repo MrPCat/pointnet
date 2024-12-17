@@ -9,7 +9,7 @@ from pointnet_ import PointNet2ClsSSG
 import logging
 
 # === Configure Logging ===
-log_file_path = "/content/drive/MyDrive/t1/training_logs.txt"
+log_file_path = "/content/drive/MyDrive/t1/training_logsNORGB.txt"
 logging.basicConfig(filename=log_file_path, level=logging.INFO, format='%(asctime)s - %(message)s')
 
 def log_and_print(message):
@@ -174,7 +174,7 @@ if __name__ == "__main__":
     train_model(model, train_loader, val_loader, optimizer,criterion, epochs, device, save_dir)
 
     # Save the trained model
-    model_path = "/content/drive/MyDrive/t1/pointnet_model.pth"
+    model_path = "/content/drive/MyDrive/t1/pointnet_modelNoRGB.pth"
     torch.save(model.state_dict(), model_path)
     log_and_print(f"Model saved to {model_path}")
     print("Model saved to pointnet_model.pth")
