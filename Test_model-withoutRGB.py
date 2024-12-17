@@ -22,7 +22,7 @@ class PointCloudDataset(Dataset):
 
         # Extract XYZ and features using iloc
         self.xyz = data.iloc[:, 0:3].values.astype(np.float64)  # First three columns for X, Y, Z
-        self.features = data.iloc[:, 6:].values.astype(np.float64)  # Columns from 'Reflectance' onwards
+        self.features = data.iloc[:, 3:].values.astype(np.float64)  # Columns from 'Reflectance' onwards
 
         # Normalize XYZ and features
         self.xyz_mean = np.mean(self.xyz, axis=0).astype(np.float64)
