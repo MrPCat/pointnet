@@ -9,7 +9,7 @@ from pointnet_ import PointNet2ClsSSG
 import logging
 
 # === Configure Logging ===
-log_file_path = "/content/drive/MyDrive/t1/checkpoints/training_logs.txt"
+log_file_path = "/content/drive/MyDrive/t1/Mar18_val.txt/training_logs.txt"
 logging.basicConfig(filename=log_file_path, level=logging.INFO, format='%(asctime)s - %(message)s')
 
 def log_and_print(message):
@@ -162,7 +162,6 @@ if __name__ == "__main__":
 
     model = PointNet2ClsSSG(in_dim=in_dim, out_dim=num_classes, downsample_points=(512, 128))
     optimizer = optim.Adam(model.parameters(), lr=0.001)
-    criterion = nn.CrossEntropyLoss()
     epochs = 10
 
     # Directory for saving checkpoints
