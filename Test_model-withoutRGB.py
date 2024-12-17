@@ -20,9 +20,9 @@ class PointCloudDataset(Dataset):
         data = pd.concat(chunks, ignore_index=True)
         print("Dataset loaded successfully. Shape:", data.shape)
 
-        # Extract XYZ and features
-        self.xyz = data[:,:3].values.astype(np.float64)
-        self.features = data[:,6:].values.astype(np.float64)
+        # Extract XYZ and features using iloc
+        self.xyz = data.iloc[:, 0:3].values.astype(np.float64)  # First three columns for X, Y, Z
+        self.features = data.iloc[:, 6:].values.astype(np.float64)  # Columns from 'Reflectance' onwards
 
         # Normalize XYZ and features
         self.xyz_mean = np.mean(self.xyz, axis=0).astype(np.float64)
@@ -58,6 +58,7 @@ class PointCloudDataset(Dataset):
         xyz = xyz.transpose(0, 1)
         features = features.transpose(0, 1)
         return features, xyz
+
 
 
 
