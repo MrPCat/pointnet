@@ -122,7 +122,7 @@ def main(txt_file, las_file):
     evaluate_classes(merged_data) 
 
 # Replace with your actual file paths 
-txt_file = r"/content/drive/MyDrive/t1/predictions.txt"
+txt_file = r"/content/drive/MyDrive/t1/PredictTest_noRGB.txt"
 las_file = r"/content/drive/MyDrive/t1/Mar18_test_GroundTruth.las" 
  
 # Run the comparison 
