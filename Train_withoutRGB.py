@@ -169,8 +169,9 @@ if __name__ == "__main__":
     os.makedirs(save_dir, exist_ok=True)
 
     # Training with Validation
+    criterion = nn.CrossEntropyLoss()
     log_and_print("Starting training...")
-    train_model(model, train_loader, val_loader, optimizer, criterion, epochs, device, save_dir)
+    train_model(model, train_loader, val_loader, optimizer,criterion, epochs, device, save_dir)
 
     # Save the trained model
     model_path = "/content/drive/MyDrive/t1/pointnet_model.pth"
