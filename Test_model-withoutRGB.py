@@ -75,7 +75,7 @@ def load_model(model_path, input_dim, output_dim):
 
 def predict_point_cloud(test_file, model_path, output_file):
     test_dataset = PointCloudDataset(test_file, points_per_cloud=1024, debug=True)
-    input_dim = test_dataset.features.shape[1] + 3
+    input_dim = test_dataset.features.shape[1]  # Only features
     model = load_model(model_path, input_dim=input_dim, output_dim=11)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model.to(device)
