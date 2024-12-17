@@ -13,21 +13,7 @@ class PointCloudDataset(Dataset):
             print("Column names in the dataset:", list(sample_data.columns))
         except Exception as e:
             raise ValueError(f"Failed to read file {file_path} or inspect columns. Error: {e}")
-
-        required_columns = ['X', 'Y', 'Z', 'Reflectance', 'NumberOfReturns', 'ReturnNumber']
-
-        # Map required columns to available ones
-        column_mapping = {}
-        for col in required_columns:
-            for available_col in sample_data.columns:
-                if col.lower() in available_col.lower():  # Case-insensitive matching
-                    column_mapping[col] = available_col
-                    break
-            if col not in column_mapping:
-                raise ValueError(f"Missing required column: {col}. Available columns: {list(sample_data.columns)}")
-
-        print("Mapped column names:", column_mapping)  # Debug print for column mappings
-
+        
         # Load full dataset with chunks
         print("Loading dataset in chunks...")
         chunks = pd.read_csv(file_path, delimiter='\t', chunksize=10000)
@@ -35,10 +21,8 @@ class PointCloudDataset(Dataset):
         print("Dataset loaded successfully. Shape:", data.shape)
 
         # Extract XYZ and features
-        self.xyz = data[[column_mapping['X'], column_mapping['Y'], column_mapping['Z']]].values.astype(np.float64)
-        self.features = data[
-            [column_mapping['Reflectance'], column_mapping['NumberOfReturns'], column_mapping['ReturnNumber']]
-        ].values.astype(np.float64)
+        self.xyz = data[:,:3].values.astype(np.float64)
+        self.features = data[:,6:].values.astype(np.float64)
 
         # Normalize XYZ and features
         self.xyz_mean = np.mean(self.xyz, axis=0).astype(np.float64)
@@ -122,6 +106,6 @@ def predict_point_cloud(test_file, model_path, output_file):
 
 if __name__ == "__main__":
     test_file = '/content/drive/MyDrive/t1/Mar18_test.txt'
-    model_path = '/content/drive/MyDrive/t1/checkpoints/pointnet_epoch_7.pth'
+    model_path = '/content/drive/MyDrive/t1/checkpoints/pointnet_epoch_4.pth'
     output_file = '/content/drive/MyDrive/t1/Mar18_testWithoutRGB_predictions.txt'
     predict_point_cloud(test_file, model_path, output_file)
