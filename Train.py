@@ -156,6 +156,7 @@ if __name__ == "__main__":
 
     # Model, Optimizer, and Loss Function
     in_dim = train_dataset.features.shape[1]
+    print(f"number of in_dim is {in_dim}")
     num_classes = len(np.unique(train_dataset.labels))
 
     model = PointNet2ClsSSG(in_dim=in_dim, out_dim=num_classes, downsample_points=(512, 128))

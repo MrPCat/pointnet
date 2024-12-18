@@ -155,10 +155,8 @@ if __name__ == "__main__":
 
     # Model, Optimizer, and Loss Function
     in_dim = train_dataset.features.shape[1]  # Extract feature dimensions
+    print(f"number of in_dim is {in_dim}")
     num_classes = len(np.unique(train_dataset.labels))
-
-    # Print overall input dimension (in_dim + XYZ)
-    print(f"Overall input dimension for the model: {in_dim + 3} (Features: {in_dim}, XYZ: 3)")
 
     model = PointNet2ClsSSG(in_dim=in_dim, out_dim=num_classes, downsample_points=(512, 128))
     optimizer = optim.Adam(model.parameters(), lr=0.001)
