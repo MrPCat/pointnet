@@ -169,8 +169,8 @@ def main(txt_file, las_file):
 # Example usage
 if __name__ == "__main__":
     # File paths - update these to your actual file paths
-    txt_file = r"/path/to/your/predictions.txt"
-    las_file = r"/path/to/your/ground_truth.las"
+    txt_file = "/content/drive/MyDrive/t1/Mar18_testWithoutRGB_predictions.txt"
+    las_file = "/content/drive/MyDrive/t1/Mar18_test_GroundTruth.las"
     
     try:
         # Run the comparison
