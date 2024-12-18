@@ -177,89 +177,91 @@ class UpBlock(nn.Module):
 
 
 class PointNet2ClsSSG(nn.Module):
-    # Original one 
-    # def __init__(
-    #         self,
-    #         in_dim,
-    #         out_dim,
-    #         *,
-    #         downsample_points=(512, 128),
-    #         radii=(0.2, 0.4),
-    #         ks=(32, 64),
-    #         head_norm=True,
-    #         dropout=0.5,
-    # ):
-    #     super().__init__()
-    #     self.downsample_points = downsample_points
-
-    #     self.sa1 = SABlock(in_dim, [64, 64, 128], radii[0], ks[0])
-    #     self.sa2 = SABlock(128, [128, 128, 256], radii[1], ks[1])
-    #     self.global_sa = nn.Sequential(
-    #         nn.Conv1d(256, 256, 1, bias=False),
-    #         nn.BatchNorm1d(256),
-    #         nn.GELU(),
-    #         nn.Conv1d(256, 512, 1, bias=False),
-    #         nn.BatchNorm1d(512),
-    #         nn.GELU(),
-    #         nn.Conv1d(512, 1024, 1, bias=False),
-    #     )
-
-    #     norm = nn.BatchNorm1d if head_norm else nn.Identity
-    #     self.norm = norm(1024)
-    #     self.act = nn.GELU()
-
-    #     self.head = nn.Sequential(
-    #         nn.Linear(1024, 512, bias=False),
-    #         norm(512),
-    #         nn.GELU(),
-    #         nn.Dropout(dropout),
-    #         nn.Linear(512, 256, bias=False),
-    #         norm(256),
-    #         nn.GELU(),
-    #         nn.Dropout(dropout),
-    #         nn.Linear(256, out_dim)
-    #    )
+    #originalOne
     def __init__(
-        self,
-        in_dim,
-        out_dim,
-        *,
-        downsample_points=(1024, 256),
-        radii=(0.3, 0.6),
-        ks=(64, 128),
-        head_norm=True,
-        dropout=0.3,
-):
+            self,
+            in_dim,
+            out_dim,
+            *,
+            downsample_points=(512, 128),
+            radii=(0.2, 0.4),
+            ks=(32, 64),
+            head_norm=True,
+            dropout=0.5,
+    ):
         super().__init__()
         self.downsample_points = downsample_points
 
-        self.sa1 = SABlock(in_dim, [128, 128, 256], radii[0], ks[0])
-        self.sa2 = SABlock(256, [256, 256, 512], radii[1], ks[1])
+        self.sa1 = SABlock(in_dim, [64, 64, 128], radii[0], ks[0])
+        self.sa2 = SABlock(128, [128, 128, 256], radii[1], ks[1])
         self.global_sa = nn.Sequential(
+            nn.Conv1d(256, 256, 1, bias=False),
+            nn.BatchNorm1d(256),
+            nn.GELU(),
             nn.Conv1d(256, 512, 1, bias=False),
             nn.BatchNorm1d(512),
             nn.GELU(),
             nn.Conv1d(512, 1024, 1, bias=False),
-            nn.BatchNorm1d(1024),
-            nn.GELU(),
-            nn.Conv1d(1024, 2048, 1, bias=False),
         )
 
         norm = nn.BatchNorm1d if head_norm else nn.Identity
-        self.norm = norm(2048)
+        self.norm = norm(1024)
         self.act = nn.GELU()
 
         self.head = nn.Sequential(
-            nn.Linear(2048, 1024, bias=False),
-            norm(1024),
-            nn.GELU(),
-            nn.Dropout(dropout),
             nn.Linear(1024, 512, bias=False),
             norm(512),
             nn.GELU(),
             nn.Dropout(dropout),
-            nn.Linear(512, out_dim)
-        )
+            nn.Linear(512, 256, bias=False),
+            norm(256),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(256, out_dim)
+       )
+
+    #####################
+#     def __init__(
+#         self,
+#         in_dim,
+#         out_dim,
+#         *,
+#         downsample_points=(1024, 256),
+#         radii=(0.3, 0.6),
+#         ks=(64, 128),
+#         head_norm=True,
+#         dropout=0.3,
+# ):
+#         super().__init__()
+#         self.downsample_points = downsample_points
+
+#         self.sa1 = SABlock(in_dim, [128, 128, 256], radii[0], ks[0])
+#         self.sa2 = SABlock(256, [256, 256, 512], radii[1], ks[1])
+#         self.global_sa = nn.Sequential(
+#             nn.Conv1d(256, 512, 1, bias=False),
+#             nn.BatchNorm1d(512),
+#             nn.GELU(),
+#             nn.Conv1d(512, 1024, 1, bias=False),
+#             nn.BatchNorm1d(1024),
+#             nn.GELU(),
+#             nn.Conv1d(1024, 2048, 1, bias=False),
+#         )
+
+#         norm = nn.BatchNorm1d if head_norm else nn.Identity
+#         self.norm = norm(2048)
+#         self.act = nn.GELU()
+
+#         self.head = nn.Sequential(
+#             nn.Linear(2048, 1024, bias=False),
+#             norm(1024),
+#             nn.GELU(),
+#             nn.Dropout(dropout),
+#             nn.Linear(1024, 512, bias=False),
+#             norm(512),
+#             nn.GELU(),
+#             nn.Dropout(dropout),
+#             nn.Linear(512, out_dim)
+#         )
 
 
     def forward(self, x, xyz):
