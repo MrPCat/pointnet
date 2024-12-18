@@ -38,34 +38,12 @@ def load_las_file(las_file):
         raise FileNotFoundError(f"LAS file not found: {las_file}")
     
     try:
-        las = laspy.read(las_file) 
+        df = pd.read_csv(las_file, sep="\t")
+    
+        return df
         
-        # Convert ScaledArrayView to numpy array first
-        x = np.array(las.x)
-        y = np.array(las.y)
-        z = np.array(las.z)
-        classifications = np.array(las.classification)
-        
-        # Create DataFrame with explicit index
-        coords = pd.DataFrame({
-            'X': x, 
-            'Y': y, 
-            'Z': z, 
-            'Classification': classifications
-        }, index=range(len(x)))
-        
-        print("load las Done") 
-        print(f"Loaded {len(coords)} points")
-        
-        # Print coordinate info for diagnosis
-        print("\nLAS File Coordinate Columns Data Types:")
-        print(coords[['X', 'Y', 'Z']].dtypes)
-        print("\nFirst few rows:")
-        print(coords.head())
-        
-        return coords 
     except Exception as e:
-        print(f"Error reading LAS file: {e}")
+        print(f"Error reading CSV file: {e}")
         raise
     
 # Step 3: Merge data based on coordinates 
