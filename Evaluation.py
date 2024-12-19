@@ -64,8 +64,6 @@ def merge_data(pred_df, ref_df, decimals=3):
         print(f"Error during merge operation: {e}")
         raise
 
-
-
 def evaluate_classes(merged_data):
     try:
         y_pred = merged_data["Classification_pred"]
