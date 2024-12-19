@@ -107,6 +107,6 @@ def predict_point_cloud(test_file, model_path, output_file):
 
 if __name__ == "__main__":
     test_file = '/content/drive/MyDrive/t1/Test_noRGB.txt'
-    model_path = '/content/drive/MyDrive/t1/checkpoints/pointnet_epoch_6.pth'
+    model_path = '/content/drive/MyDrive/t1/checkpoints/pointnet_epoch_8.pth'
     output_file = '/content/drive/MyDrive/t1/PredictTest_noRGB.txt'
     predict_point_cloud(test_file, model_path, output_file)

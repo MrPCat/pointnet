@@ -49,11 +49,21 @@ def merge_data(pred_df, ref_df, decimals=3):
             merged_chunks.append(merged_chunk)
 
         merged = pd.concat(merged_chunks, ignore_index=True)
+
+        # Calculate unmatched points
+        matched_coords = merged[['X', 'Y', 'Z']]
+        unmatched_pred = pred_df_rounded[~pred_df_rounded[['X', 'Y', 'Z']].isin(matched_coords.to_numpy()).all(axis=1)]
+        unmatched_ref = ref_df_rounded[~ref_df_rounded[['X', 'Y', 'Z']].isin(matched_coords.to_numpy()).all(axis=1)]
+        
         print(f"Merge Done. {len(merged)} points matched.")
+        print(f"Unmatched points in predictions: {len(unmatched_pred)}")
+        print(f"Unmatched points in reference: {len(unmatched_ref)}")
+
         return merged
     except Exception as e:
         print(f"Error during merge operation: {e}")
         raise
+
 
 def evaluate_classes(merged_data):
     try:
@@ -130,7 +140,7 @@ def main(predictions_file, reference_file):
         raise
 
 if __name__ == "__main__":
-    predictions_file = "/content/drive/MyDrive/Archive /1. first attempt with RGB and high Accuracy there /predictions_First_Exp.txt"
+    predictions_file = "/content/drive/MyDrive/training_logsNORGB.txt"
     reference_file = "/content/drive/MyDrive/t1/Mar18_test_GroundTruth.las"
 
     try:
