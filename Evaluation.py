@@ -127,7 +127,7 @@ def main(predictions_file, reference_file):
 
 if __name__ == "__main__":
     # Update these paths to your actual file paths
-    predictions_file = "/content/drive/MyDrive/t1/Mar18_testWithoutRGB_predictions.txt"
+    predictions_file = "/content/drive/MyDrive/Archive /1. first attempt with RGB and high Accuracy there /predictions_First_Exp.txt"
     reference_file = "/content/drive/MyDrive/t1/Mar18_test_GroundTruth.las"
     
     try:
