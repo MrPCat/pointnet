@@ -140,7 +140,7 @@ def main(predictions_file, reference_file):
         raise
 
 if __name__ == "__main__":
-    predictions_file = "/content/drive/MyDrive/training_logsNORGB.txt"
+    predictions_file = "/content/drive/MyDrive/t1/PredictTest_noRGB.txt"
     reference_file = "/content/drive/MyDrive/t1/Mar18_test_GroundTruth.las"
 
     try:
