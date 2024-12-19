@@ -38,31 +38,32 @@ def merge_data(pred_df, ref_df, decimals=3):
         pred_df_rounded[['X', 'Y', 'Z']] = pred_df[['X', 'Y', 'Z']].round(decimals)
         ref_df_rounded[['X', 'Y', 'Z']] = ref_df[['X', 'Y', 'Z']].round(decimals)
 
+        print("Pred DF Rounded Shape:", pred_df_rounded.shape)
+        print("Ref DF Rounded Shape:", ref_df_rounded.shape)
+
         chunk_size = 1_000_000
         merged_chunks = []
 
         for i in range(0, len(pred_df_rounded), chunk_size):
             pred_chunk = pred_df_rounded.iloc[i:i + chunk_size]
+
+            print(f"Merging chunk {i // chunk_size + 1}...")
+            print("Pred Chunk Shape:", pred_chunk.shape)
+            print("Ref DF Shape:", ref_df_rounded.shape)
+
             merged_chunk = pd.merge(pred_chunk, ref_df_rounded, 
                                     on=['X', 'Y', 'Z'], 
                                     suffixes=("_pred", "_ref"))
             merged_chunks.append(merged_chunk)
 
         merged = pd.concat(merged_chunks, ignore_index=True)
-
-        # Calculate unmatched points
-        matched_coords = merged[['X', 'Y', 'Z']]
-        unmatched_pred = pred_df_rounded[~pred_df_rounded[['X', 'Y', 'Z']].isin(matched_coords.to_numpy()).all(axis=1)]
-        unmatched_ref = ref_df_rounded[~ref_df_rounded[['X', 'Y', 'Z']].isin(matched_coords.to_numpy()).all(axis=1)]
-        
         print(f"Merge Done. {len(merged)} points matched.")
-        print(f"Unmatched points in predictions: {len(unmatched_pred)}")
-        print(f"Unmatched points in reference: {len(unmatched_ref)}")
-
         return merged
+
     except Exception as e:
         print(f"Error during merge operation: {e}")
         raise
+
 
 
 def evaluate_classes(merged_data):
