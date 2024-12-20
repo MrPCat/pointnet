@@ -7,8 +7,6 @@ from pointnet_ import PointNet2ClsSSG
 
 class LASPointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
-        # Define the specific attributes we want to use for features
-        # Note: Classification is not included in features
         self.feature_attributes = [
             'red', 'green', 'blue',  # R, G, B
             'intensity',  # Reflectance
@@ -16,21 +14,21 @@ class LASPointCloudDataset(Dataset):
             'return_number'
         ]
 
+        # Load LAS file
         try:
-            # Load the LAS file using laspy
             las = laspy.read(file_path)
             print("LAS file loaded successfully")
-            
+
             # Print included point attributes
             print("\nUsing these attributes as features:")
             print("- X, Y, Z (coordinates)")
             for attr in self.feature_attributes:
                 print(f"- {attr}")
-                
+
         except Exception as e:
             raise ValueError(f"Failed to read LAS file {file_path}. Error: {e}")
 
-        # Extract XYZ coordinates
+        # Extract XYZ and features
         try:
             # Extract XYZ coordinates
             self.xyz = np.vstack((las.x, las.y, las.z)).transpose()
@@ -44,44 +42,35 @@ class LASPointCloudDataset(Dataset):
             feature_arrays.append(np.array(las.green).reshape(-1, 1) / rgb_scale)
             feature_arrays.append(np.array(las.blue).reshape(-1, 1) / rgb_scale)
 
-            # Extract other features (excluding classification)
-            feature_arrays.append(np.array(las.intensity).reshape(-1, 1))  # Reflectance
-            feature_arrays.append(np.array(las.number_of_returns).reshape(-1, 1))  # Number of returns
-            feature_arrays.append(np.array(las.return_number).reshape(-1, 1))  # Return number
+            # Extract other features
+            for attr in self.feature_attributes[3:]:
+                if hasattr(las, attr):
+                    feature_arrays.append(np.array(getattr(las, attr)).reshape(-1, 1))
+                else:
+                    raise ValueError(f"Missing required LAS attribute: {attr}")
 
-        except AttributeError as e:
-            raise ValueError(f"Error accessing LAS attributes. Check file format: {e}")
-        except Exception as e:
-            raise ValueError(f"Unexpected error during feature extraction: {e}")
-
-
-            # Combine all features into one array
+            # Combine all features
             self.features = np.hstack(feature_arrays).astype(np.float64)
-            print("\nFeature dimensions:")
-            print("RGB:", feature_arrays[0].shape[1] + feature_arrays[1].shape[1] + feature_arrays[2].shape[1])
-            print("Reflectance:", feature_arrays[3].shape[1])
-            print("NumberOfReturns:", feature_arrays[4].shape[1])
-            print("ReturnNumber:", feature_arrays[5].shape[1])
-            print("Total features (excluding classification):", self.features.shape[1])
-            
-        except AttributeError as e:
-            raise ValueError(f"Error accessing LAS attributes. Check file format: {e}")
 
-        # Debug extracted data
-        print("XYZ Shape:", self.xyz.shape)
-        print("Feature shape:", self.features.shape)
+        except Exception as e:
+            raise ValueError(f"Error during feature extraction: {e}")
+
+        # Debug feature dimensions
+        if debug:
+            print("\nFeature dimensions:")
+            for i, attr in enumerate(self.feature_attributes):
+                print(f"{attr.capitalize()}: {feature_arrays[i].shape[1]}")
+            print(f"Total features: {self.features.shape[1]}")
 
         # Normalize XYZ
         self.xyz_mean = np.mean(self.xyz, axis=0).astype(np.float64)
         self.xyz = (self.xyz - self.xyz_mean).astype(np.float64)
 
         # Normalize features
-        # Handle potential zero standard deviation
         feature_means = np.mean(self.features, axis=0)
         feature_stds = np.std(self.features, axis=0)
         feature_stds[feature_stds == 0] = 1  # Prevent division by zero
         self.features = (self.features - feature_means) / feature_stds
-        self.features = self.features.astype(np.float64)
 
         # Ensure divisibility by points_per_cloud
         self.points_per_cloud = points_per_cloud
@@ -98,9 +87,9 @@ class LASPointCloudDataset(Dataset):
         print(f"Points per Cloud: {self.points_per_cloud}")
         print(f"Number of Point Clouds: {self.num_clouds}")
         print(f"XYZ Shape: {self.xyz.shape}")
-        print(f"Features Shape (excluding classification): {self.features.shape}")
+        print(f"Features Shape: {self.features.shape}")
         print(f"XYZ Mean: {self.xyz_mean}")
-        
+
     def __len__(self):
         return self.num_clouds
 
@@ -112,7 +101,6 @@ class LASPointCloudDataset(Dataset):
         xyz = xyz.transpose(0, 1)
         features = features.transpose(0, 1)
         return features, xyz
-
 
 def load_model(model_path, input_dim, output_dim):
     model = PointNet2ClsSSG(in_dim=input_dim, out_dim=output_dim)
