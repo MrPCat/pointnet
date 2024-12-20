@@ -7,15 +7,25 @@ from pointnet_ import PointNet2ClsSSG
 
 class LASPointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
+        # Define the specific attributes we want to use for features
+        # Note: Classification is not included in features
+        self.feature_attributes = [
+            'red', 'green', 'blue',  # R, G, B
+            'intensity',  # Reflectance
+            'number_of_returns',
+            'return_number'
+        ]
+
         try:
             # Load the LAS file using laspy
             las = laspy.read(file_path)
             print("LAS file loaded successfully")
             
-            # Print all available point attributes
-            print("\nAvailable point attributes:")
-            for dimension in las.point_format.dimension_names:
-                print(f"- {dimension}")
+            # Print included point attributes
+            print("\nUsing these attributes as features:")
+            print("- X, Y, Z (coordinates)")
+            for attr in self.feature_attributes:
+                print(f"- {attr}")
                 
         except Exception as e:
             raise ValueError(f"Failed to read LAS file {file_path}. Error: {e}")
@@ -27,31 +37,25 @@ class LASPointCloudDataset(Dataset):
             # Initialize list to store all feature arrays
             feature_arrays = []
             
-            # Extract all available features
-            for dimension in las.point_format.dimension_names:
-                # Skip X, Y, Z as they're already handled
-                if dimension.lower() not in ['x', 'y', 'z']:
-                    try:
-                        # Get the attribute data
-                        feature_data = getattr(las, dimension)
-                        
-                        # Reshape to column vector if necessary
-                        if len(feature_data.shape) == 1:
-                            feature_data = feature_data.reshape(-1, 1)
-                            
-                        # Convert to float if not already
-                        feature_data = feature_data.astype(np.float64)
-                        
-                        # Append to feature arrays
-                        feature_arrays.append(feature_data)
-                        print(f"Added feature: {dimension}, Shape: {feature_data.shape}")
-                        
-                    except Exception as e:
-                        print(f"Warning: Could not process feature {dimension}: {e}")
+            # Extract RGB (normalize to 0-1 range if necessary)
+            rgb_scale = 65535.0 if las.header.point_format.id >= 3 else 255.0
+            feature_arrays.append(las.red.reshape(-1, 1) / rgb_scale)
+            feature_arrays.append(las.green.reshape(-1, 1) / rgb_scale)
+            feature_arrays.append(las.blue.reshape(-1, 1) / rgb_scale)
+            
+            # Extract other features (excluding classification)
+            feature_arrays.append(las.intensity.reshape(-1, 1))  # Reflectance
+            feature_arrays.append(las.number_of_returns.reshape(-1, 1))
+            feature_arrays.append(las.return_number.reshape(-1, 1))
             
             # Combine all features into one array
-            self.features = np.hstack(feature_arrays)
-            print("\nTotal features shape:", self.features.shape)
+            self.features = np.hstack(feature_arrays).astype(np.float64)
+            print("\nFeature dimensions:")
+            print("RGB:", feature_arrays[0].shape[1] + feature_arrays[1].shape[1] + feature_arrays[2].shape[1])
+            print("Reflectance:", feature_arrays[3].shape[1])
+            print("NumberOfReturns:", feature_arrays[4].shape[1])
+            print("ReturnNumber:", feature_arrays[5].shape[1])
+            print("Total features (excluding classification):", self.features.shape[1])
             
         except AttributeError as e:
             raise ValueError(f"Error accessing LAS attributes. Check file format: {e}")
@@ -87,9 +91,9 @@ class LASPointCloudDataset(Dataset):
         print(f"Points per Cloud: {self.points_per_cloud}")
         print(f"Number of Point Clouds: {self.num_clouds}")
         print(f"XYZ Shape: {self.xyz.shape}")
-        print(f"Features Shape: {self.features.shape}")
+        print(f"Features Shape (excluding classification): {self.features.shape}")
         print(f"XYZ Mean: {self.xyz_mean}")
-
+        
     def __len__(self):
         return self.num_clouds
 
@@ -118,8 +122,8 @@ def predict_point_cloud(test_file, model_path, output_file):
     # Load the dataset
     test_dataset = LASPointCloudDataset(test_file, points_per_cloud=1024, debug=True)
 
-    # Get input dimensions
-    input_dim = test_dataset.features.shape[1] + 3  # Add 3 for XYZ
+    # Get input dimensions (features + XYZ, excluding classification)
+    input_dim = test_dataset.features.shape[1]
     print(f"Input dimension for the model: {input_dim}")
 
     # Load the model
@@ -146,9 +150,16 @@ def predict_point_cloud(test_file, model_path, output_file):
     input_las = laspy.read(test_file)
     output_las = laspy.LasData(input_las.header)
     
-    # Copy all points and their attributes
-    for dimension in input_las.point_format.dimension_names:
-        setattr(output_las, dimension, getattr(input_las, dimension))
+    # Copy only the specified attributes
+    output_las.x = input_las.x
+    output_las.y = input_las.y
+    output_las.z = input_las.z
+    output_las.red = input_las.red
+    output_las.green = input_las.green
+    output_las.blue = input_las.blue
+    output_las.intensity = input_las.intensity  # Reflectance
+    output_las.number_of_returns = input_las.number_of_returns
+    output_las.return_number = input_las.return_number
     
     # Add predictions as classification
     point_cloud_predictions = np.repeat(all_predictions, test_dataset.points_per_cloud)
