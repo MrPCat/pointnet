@@ -1,38 +1,45 @@
 import numpy as np
 import torch
-import pandas as pd
+import laspy
 from torch.utils.data import Dataset, DataLoader
 from pointnet_ import PointNet2ClsSSG
 
 
-class PointCloudDataset(Dataset):
+class LASPointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024, debug=True):
         try:
-            # Load the text file using pandas
-            data = pd.read_csv(file_path, delimiter='\t')
-            print("Dataset preview:\n", data.head())
-            print("Columns in dataset:\n", list(data.columns))
+            # Load the LAS file using laspy
+            las = laspy.read(file_path)
+            print("LAS file loaded successfully")
         except Exception as e:
-            raise ValueError(f"Failed to read file {file_path}. Error: {e}")
+            raise ValueError(f"Failed to read LAS file {file_path}. Error: {e}")
 
-        # Extract XYZ and features
+        # Extract XYZ coordinates
         try:
-            self.xyz = data.iloc[:, 0:3].values.astype(np.float64)  # Columns 0, 1, 2 -> X, Y, Z
-            self.features = data.iloc[:, 6:9].values.astype(np.float64)  # Columns 6, 7, 8 -> Reflectance, NumberOfReturns, ReturnNumber
-        except IndexError as e:
-            raise ValueError(f"Error in selecting columns. Check file format: {e}")
+            self.xyz = np.vstack((las.x, las.y, las.z)).transpose()
+            
+            # Extract features (assuming these fields exist in your LAS file)
+            # Adjust these based on your LAS file's available fields
+            self.features = np.vstack((
+                las.intensity,  # equivalent to reflectance
+                las.number_of_returns,
+                las.return_number
+            )).transpose()
+            
+        except AttributeError as e:
+            raise ValueError(f"Error accessing LAS attributes. Check file format: {e}")
 
         # Debug extracted data
         print("XYZ Shape:", self.xyz.shape)
-        print("Selected feature columns (6:9):\n", data.iloc[:, 6:9].head())
-        print("Feature shape after extraction (should be 3):", self.features.shape)
+        print("Feature shape:", self.features.shape)
 
         # Normalize XYZ
         self.xyz_mean = np.mean(self.xyz, axis=0).astype(np.float64)
-        self.xyz -= self.xyz_mean
+        self.xyz = (self.xyz - self.xyz_mean).astype(np.float64)
 
         # Normalize features
-        self.features = (self.features - np.mean(self.features, axis=0)) / np.std(self.features, axis=0)
+        self.features = (self.features - np.mean(self.features, axis=0)) / (np.std(self.features, axis=0) + 1e-6)
+        self.features = self.features.astype(np.float64)
 
         # Ensure divisibility by points_per_cloud
         self.points_per_cloud = points_per_cloud
@@ -78,7 +85,7 @@ def load_model(model_path, input_dim, output_dim):
 
 def predict_point_cloud(test_file, model_path, output_file):
     # Load the dataset
-    test_dataset = PointCloudDataset(test_file, points_per_cloud=1024, debug=True)
+    test_dataset = LASPointCloudDataset(test_file, points_per_cloud=1024, debug=True)
 
     # Get input dimensions
     input_dim = test_dataset.features.shape[1] + 3  # Add 3 for XYZ
@@ -104,24 +111,26 @@ def predict_point_cloud(test_file, model_path, output_file):
             all_predictions.extend(predictions.cpu().numpy())
 
     # Save predictions
-    point_cloud_predictions = np.array(all_predictions).reshape(-1, 1).astype(np.float64)
-    denormalized_xyz = (test_dataset.xyz[:len(point_cloud_predictions) * test_dataset.points_per_cloud]
-                        + test_dataset.xyz_mean).astype(np.float64)
-    feature_columns = ['Reflectance', 'NumberOfReturns', 'ReturnNumber']
-    augmented_data = np.hstack([
-        denormalized_xyz,
-        test_dataset.features[:len(point_cloud_predictions) * test_dataset.points_per_cloud],
-        np.repeat(point_cloud_predictions, test_dataset.points_per_cloud, axis=0)
-    ])
-    np.savetxt(output_file, augmented_data, delimiter='\t', fmt='%.15f',
-               header='\t'.join(['X', 'Y', 'Z'] + feature_columns + ['Classification']),
-               comments='')
+    # Create a new LAS file with predictions
+    input_las = laspy.read(test_file)
+    output_las = laspy.LasData(input_las.header)
+    
+    # Copy all points and their attributes
+    for dimension in input_las.point_format.dimension_names:
+        setattr(output_las, dimension, getattr(input_las, dimension))
+    
+    # Add predictions as classification
+    point_cloud_predictions = np.repeat(all_predictions, test_dataset.points_per_cloud)
+    output_las.classification = point_cloud_predictions[:len(input_las.points)]
+    
+    # Save the new LAS file
+    output_las.write(output_file)
     print(f"Predictions saved to {output_file}")
 
 
 if __name__ == "__main__":
-    test_file = r"C:\Farshid\Uni\Semesters\Thesis\Data\Epoch_March2018\LiDAR\Mar18_test.txt" # Replace with your .txt file path
-    model_path = r"C:\Users\faars\Downloads\pointnet_epoch_7.pth"
-    output_file = r'C:\Users\faars\Downloads\Mar18_testWithoutRGB_predictions.txt'
+    test_file = '/content/drive/MyDrive/Archive /output_with_rgb1.las'
+    model_path = '/content/drive/MyDrive/Archive /1. first attempt with RGB and high Accuracy there /pointnet_model.pth'
+    output_file = '/content/drive/MyDrive/t1/output_with_rgb1_predictions.las'
 
     predict_point_cloud(test_file, model_path, output_file)
