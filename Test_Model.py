@@ -71,10 +71,10 @@ def load_model(model_path, input_dim, output_dim):
 
 if __name__ == "__main__":
     # File paths
-    test_file = r"C:\Users\faars\Downloads\output_with_rgb1.las"
-    model_path = '/content/drive/MyDrive/t1/checkpoints/pointnet_epoch_7.pth'
+    test_file = '/content/drive/MyDrive/Archive /output_with_rgb1.las'
+    model_path = '/content/drive/MyDrive/Archive /1. first attempt with RGB and high Accuracy there /pointnet_model.pth'
     output_file = '/content/drive/MyDrive/t1/output_with_rgb1_predictions.txt'
-
+    
     # Load the test dataset
     test_dataset = PointCloudDataset(test_file, points_per_cloud=1024, debug=True)
 
