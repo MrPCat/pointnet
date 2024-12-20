@@ -179,6 +179,6 @@ def predict_point_cloud(test_file, model_path, output_file):
 if __name__ == "__main__":
     test_file = '/content/drive/MyDrive/Archive /output_with_rgb1.las'
     model_path = '/content/drive/MyDrive/Archive /1. first attempt with RGB and high Accuracy there /pointnet_model.pth'
-    output_file = '/content/drive/MyDrive/t1/output_with_rgb1_predictions.las'
+    output_file = '/content/drive/MyDrive/output_with_rgb1_predictions.las'
 
     predict_point_cloud(test_file, model_path, output_file)
