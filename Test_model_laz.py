@@ -141,28 +141,39 @@ def predict_point_cloud(test_file, model_path, output_file):
             all_predictions.extend(predictions.cpu().numpy())
 
     # Save predictions
-    # Create a new LAS file with predictions
     input_las = laspy.read(test_file)
     output_las = laspy.LasData(input_las.header)
-    
-    # Copy only the specified attributes
+
+    # Copy original attributes
     output_las.x = input_las.x
     output_las.y = input_las.y
     output_las.z = input_las.z
     output_las.red = input_las.red
     output_las.green = input_las.green
     output_las.blue = input_las.blue
-    output_las.intensity = input_las.intensity  # Reflectance
+    output_las.intensity = input_las.intensity
     output_las.number_of_returns = input_las.number_of_returns
     output_las.return_number = input_las.return_number
-    
-    # Add predictions as classification
-    point_cloud_predictions = np.repeat(all_predictions, test_dataset.points_per_cloud)
-    output_las.classification = point_cloud_predictions[:len(input_las.points)]
-    
+
+    # Adjust predictions to match the number of points
+    original_point_count = len(input_las.points)
+    point_cloud_predictions = np.array(all_predictions)
+
+    if len(point_cloud_predictions) < original_point_count:
+        # Pad with the most common prediction or zeros
+        padding = np.full(original_point_count - len(point_cloud_predictions),
+                          fill_value=np.bincount(point_cloud_predictions).argmax())
+        point_cloud_predictions = np.concatenate((point_cloud_predictions, padding))
+    else:
+        point_cloud_predictions = point_cloud_predictions[:original_point_count]
+
+    # Assign predictions as classification
+    output_las.classification = point_cloud_predictions
+
     # Save the new LAS file
     output_las.write(output_file)
     print(f"Predictions saved to {output_file}")
+
 
 
 if __name__ == "__main__":
