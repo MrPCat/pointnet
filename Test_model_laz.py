@@ -11,6 +11,12 @@ class LASPointCloudDataset(Dataset):
             # Load the LAS file using laspy
             las = laspy.read(file_path)
             print("LAS file loaded successfully")
+            
+            # Print all available point attributes
+            print("\nAvailable point attributes:")
+            for dimension in las.point_format.dimension_names:
+                print(f"- {dimension}")
+                
         except Exception as e:
             raise ValueError(f"Failed to read LAS file {file_path}. Error: {e}")
 
@@ -18,13 +24,34 @@ class LASPointCloudDataset(Dataset):
         try:
             self.xyz = np.vstack((las.x, las.y, las.z)).transpose()
             
-            # Extract features (assuming these fields exist in your LAS file)
-            # Adjust these based on your LAS file's available fields
-            self.features = np.vstack((
-                las.intensity,  # equivalent to reflectance
-                las.number_of_returns,
-                las.return_number
-            )).transpose()
+            # Initialize list to store all feature arrays
+            feature_arrays = []
+            
+            # Extract all available features
+            for dimension in las.point_format.dimension_names:
+                # Skip X, Y, Z as they're already handled
+                if dimension.lower() not in ['x', 'y', 'z']:
+                    try:
+                        # Get the attribute data
+                        feature_data = getattr(las, dimension)
+                        
+                        # Reshape to column vector if necessary
+                        if len(feature_data.shape) == 1:
+                            feature_data = feature_data.reshape(-1, 1)
+                            
+                        # Convert to float if not already
+                        feature_data = feature_data.astype(np.float64)
+                        
+                        # Append to feature arrays
+                        feature_arrays.append(feature_data)
+                        print(f"Added feature: {dimension}, Shape: {feature_data.shape}")
+                        
+                    except Exception as e:
+                        print(f"Warning: Could not process feature {dimension}: {e}")
+            
+            # Combine all features into one array
+            self.features = np.hstack(feature_arrays)
+            print("\nTotal features shape:", self.features.shape)
             
         except AttributeError as e:
             raise ValueError(f"Error accessing LAS attributes. Check file format: {e}")
@@ -38,7 +65,11 @@ class LASPointCloudDataset(Dataset):
         self.xyz = (self.xyz - self.xyz_mean).astype(np.float64)
 
         # Normalize features
-        self.features = (self.features - np.mean(self.features, axis=0)) / (np.std(self.features, axis=0) + 1e-6)
+        # Handle potential zero standard deviation
+        feature_means = np.mean(self.features, axis=0)
+        feature_stds = np.std(self.features, axis=0)
+        feature_stds[feature_stds == 0] = 1  # Prevent division by zero
+        self.features = (self.features - feature_means) / feature_stds
         self.features = self.features.astype(np.float64)
 
         # Ensure divisibility by points_per_cloud
