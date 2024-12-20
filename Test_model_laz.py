@@ -32,22 +32,29 @@ class LASPointCloudDataset(Dataset):
 
         # Extract XYZ coordinates
         try:
+            # Extract XYZ coordinates
             self.xyz = np.vstack((las.x, las.y, las.z)).transpose()
-            
+
             # Initialize list to store all feature arrays
             feature_arrays = []
-            
+
             # Extract RGB (normalize to 0-1 range if necessary)
             rgb_scale = 65535.0 if las.header.point_format.id >= 3 else 255.0
-            feature_arrays.append(las.red.reshape(-1, 1) / rgb_scale)
-            feature_arrays.append(las.green.reshape(-1, 1) / rgb_scale)
-            feature_arrays.append(las.blue.reshape(-1, 1) / rgb_scale)
-            
+            feature_arrays.append(np.array(las.red).reshape(-1, 1) / rgb_scale)
+            feature_arrays.append(np.array(las.green).reshape(-1, 1) / rgb_scale)
+            feature_arrays.append(np.array(las.blue).reshape(-1, 1) / rgb_scale)
+
             # Extract other features (excluding classification)
-            feature_arrays.append(las.intensity.reshape(-1, 1))  # Reflectance
-            feature_arrays.append(las.number_of_returns.reshape(-1, 1))
-            feature_arrays.append(las.return_number.reshape(-1, 1))
-            
+            feature_arrays.append(np.array(las.intensity).reshape(-1, 1))  # Reflectance
+            feature_arrays.append(np.array(las.number_of_returns).reshape(-1, 1))  # Number of returns
+            feature_arrays.append(np.array(las.return_number).reshape(-1, 1))  # Return number
+
+        except AttributeError as e:
+            raise ValueError(f"Error accessing LAS attributes. Check file format: {e}")
+        except Exception as e:
+            raise ValueError(f"Unexpected error during feature extraction: {e}")
+
+
             # Combine all features into one array
             self.features = np.hstack(feature_arrays).astype(np.float64)
             print("\nFeature dimensions:")
