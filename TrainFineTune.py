@@ -140,9 +140,9 @@ if __name__ == "__main__":
     print("Using device:", device)
     
     # Specify File Paths
-    train_file = '/content/drive/MyDrive/t1/Mar18_train.txt'
-    val_file = '/content/drive/MyDrive/t1/Mar18_val.txt'
-    test_file = '/content/drive/MyDrive/t1/Mar18_test.txt'
+    train_file = '/content/drive/MyDrive/H3D LiDar Data/Mar18_train_downsampled.txt'
+    val_file = '/content/drive/MyDrive/H3D LiDar Data/Mar18_val_downsampled.txt'
+    test_file = '/content/drive/MyDrive/H3D LiDar Data/Mar18_test.txt'
 
     # Dataset and DataLoader
     batch_size = 16
