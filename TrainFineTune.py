@@ -9,7 +9,7 @@ from pointnet_ import PointNet2ClsSSGv1
 import logging
 
 # === Configure Logging ===
-log_file_path = "/content/drive/MyDrive/t1/training_logs.txt"
+log_file_path = "/content/drive/MyDrive//training_logs.txt"
 logging.basicConfig(filename=log_file_path, level=logging.INFO, format='%(asctime)s - %(message)s')
 
 def log_and_print(message):
@@ -168,6 +168,7 @@ if __name__ == "__main__":
     head_norm = True  # Use BatchNorm in classification head
 
     # Create the model and pass the values
+    # Create the model and pass the values
     model = PointNet2ClsSSGv1(
         in_dim=in_dim,
         out_dim=num_classes,
@@ -175,9 +176,17 @@ if __name__ == "__main__":
         radii=radii,
         ks=ks,
         dropout=dropout,
-        head_norm=head_norm
-    )
-        # Freeze feature extraction layers
+        head_norm=head_norm)
+
+    # Load pretrained weights
+    pretrained_path = "/content/drive/MyDrive/Archive /1. first attempt with RGB and high Accuracy there /pointnet_model.pth"  # Update path to your pretrained model
+    if os.path.exists(pretrained_path):
+        log_and_print(f"Loading pretrained weights from {pretrained_path}")
+        model.load_state_dict(torch.load(pretrained_path, map_location=device))
+    else:
+        log_and_print(f"Pretrained model not found at {pretrained_path}, proceeding without pretrained weights")
+
+    # Freeze feature extraction layers
     for name, param in model.named_parameters():
         if "sa1" in name or "sa2" in name:
             param.requires_grad = False
@@ -210,7 +219,7 @@ if __name__ == "__main__":
 
 
     # Save the trained model
-    model_path = "/content/drive/MyDrive/t1/pointnet_model.pth"
+    model_path = "/content/drive/MyDrive/H3D LiDar Data/checkpoints/pointnet_model.pth"
     torch.save(model.state_dict(), model_path)
     log_and_print(f"Model saved to {model_path}")
     print("Model saved to pointnet_model.pth")
