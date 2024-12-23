@@ -73,7 +73,7 @@ if __name__ == "__main__":
     # File paths
     test_file = '/content/drive/MyDrive/Archive /output_with_rgb1.txt'
     model_path = '/content/drive/MyDrive/H3D LiDar Data/checkpoints/pointnet_epoch_36.pth'
-    output_file = '/content/drive/MyDrive/t1/output_new_predictions.txt'
+    output_file = '/content/drive/MyDrive/Archive /output_new_predictions.txt'
     
     # Load the test dataset
     test_dataset = PointCloudDataset(test_file, points_per_cloud=1024, debug=True)
