@@ -209,7 +209,7 @@ if __name__ == "__main__":
     epochs = 50
 
     # Directory for saving checkpoints
-    save_dir = "/content/drive/MyDrive/t1/checkpoints"
+    save_dir = "/content/drive/MyDrive/H3D LiDar Data/checkpoints"
     os.makedirs(save_dir, exist_ok=True)
 
     # Training with Validation
