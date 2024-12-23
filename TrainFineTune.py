@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from pointnet_ import PointNetCls, STN
-from pointnet_ import pointnet2V1 
+from pointnet_ import PointNet2ClsSSGv1 
 import logging
 
 # === Configure Logging ===
@@ -168,7 +168,7 @@ if __name__ == "__main__":
     head_norm = True  # Use BatchNorm in classification head
 
     # Create the model and pass the values
-    model = pointnet2V1(
+    model = PointNet2ClsSSGv1(
         in_dim=in_dim,
         out_dim=num_classes,
         downsample_points=downsample_points,

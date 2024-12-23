@@ -280,6 +280,70 @@ class PointNet2ClsSSG(nn.Module):
         return out
 
 
+# FOR Finetuning the files there 
+
+class PointNet2ClsSSGv1(nn.Module):
+    def __init__(
+            self,
+            in_dim,
+            out_dim,
+            *,
+            downsample_points,  # Dynamically set in train.py
+            radii,
+            ks,
+            head_norm,
+            dropout
+    ):
+        super().__init__()
+        self.downsample_points = downsample_points
+
+        # Set abstraction blocks
+        self.sa1 = SABlock(in_dim, [64, 64, 128], radii[0], ks[0])
+        self.sa2 = SABlock(128, [128, 128, 256], radii[1], ks[1])
+
+        # Global feature aggregation
+        self.global_sa = nn.Sequential(
+            nn.Conv1d(256, 256, 1, bias=False),
+            nn.BatchNorm1d(256),
+            nn.GELU(),
+            nn.Conv1d(256, 512, 1, bias=False),
+            nn.BatchNorm1d(512),
+            nn.GELU(),
+            nn.Conv1d(512, 1024, 1, bias=False),
+        )
+
+        # Classification head
+        norm = nn.BatchNorm1d if head_norm else nn.Identity
+        self.norm = norm(1024)
+        self.act = nn.GELU()
+
+        self.head = nn.Sequential(
+            nn.Linear(1024, 512, bias=False),
+            norm(512),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(512, 256, bias=False),
+            norm(256),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(256, out_dim)
+        )
+
+    def forward(self, x, xyz):
+        # x: (b, c, n)
+        # xyz: (b, 3, n)
+        xyz1 = downsample_fps(xyz, self.downsample_points[0]).xyz
+        x1 = self.sa1(x, xyz, xyz1)
+
+        xyz2 = downsample_fps(xyz1, self.downsample_points[1]).xyz
+        x2 = self.sa2(x1, xyz1, xyz2)
+
+        x3 = self.global_sa(x2)
+        out = x3.max(-1)[0]
+        out = self.act(self.norm(out))
+        out = self.head(out)
+        return out
+
 class PointNet2ClsMSG(nn.Module):
 
     def __init__(
