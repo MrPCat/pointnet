@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from pointnet_ import PointNetCls, STN
-from pointnet_ import PointNet2ClsSSG 
+from pointnet_ import pointnet2V1 
 import logging
 
 # === Configure Logging ===
@@ -156,12 +156,48 @@ if __name__ == "__main__":
 
     # Model, Optimizer, and Loss Function
     in_dim = train_dataset.features.shape[1]
+    print(f"number of in_dim is {in_dim}")
     num_classes = len(np.unique(train_dataset.labels))
 
-    model = PointNet2ClsSSG(in_dim=in_dim, out_dim=num_classes, downsample_points=(512, 128))
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    #model = PointNet2ClsSSG(in_dim=in_dim, out_dim=num_classes, downsample_points=(512, 128))
+    # Define hyperparameters in train.py
+    downsample_points = (128, 32)  # Adjusted for sparse data
+    radii = (0.4, 0.8)  # Increased radius for sparse data
+    ks = (16, 32)  # Reduced neighbors due to sparsity
+    dropout = 0.5  # Regularization for better generalization
+    head_norm = True  # Use BatchNorm in classification head
+
+    # Create the model and pass the values
+    model = pointnet2V1(
+        in_dim=in_dim,
+        out_dim=num_classes,
+        downsample_points=downsample_points,
+        radii=radii,
+        ks=ks,
+        dropout=dropout,
+        head_norm=head_norm
+    )
+        # Freeze feature extraction layers
+    for name, param in model.named_parameters():
+        if "sa1" in name or "sa2" in name:
+            param.requires_grad = False
+
+    # Ensure classification head and global feature layers are trainable
+    for name, param in model.named_parameters():
+        if "global_sa" in name or "head" in name:
+            param.requires_grad = True
+
+
+
+    #optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(
+    filter(lambda p: p.requires_grad, model.parameters()),
+    lr=1e-4,
+    weight_decay=1e-5  # Optional regularization
+)
+
     criterion = nn.CrossEntropyLoss()
-    epochs = 10
+    epochs = 50
 
     # Directory for saving checkpoints
     save_dir = "/content/drive/MyDrive/t1/checkpoints"
