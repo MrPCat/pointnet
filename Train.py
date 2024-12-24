@@ -165,7 +165,7 @@ if __name__ == "__main__":
     epochs = 50
 
     # Directory for saving checkpoints
-    save_dir = "/content/drive/MyDrive/t1/checkpoints"
+    save_dir = "/content/drive/MyDrive/H3D LiDar Data/checkpointsDown"
     os.makedirs(save_dir, exist_ok=True)
 
     # Training with Validation
@@ -175,7 +175,7 @@ if __name__ == "__main__":
 
 
     # Save the trained model
-    model_path = "/content/drive/MyDrive/t1/pointnetDown_model.pth"
+    model_path = "/content/drive/MyDrive/H3D LiDar Data/pointnetDown_model.pth"
     torch.save(model.state_dict(), model_path)
     log_and_print(f"Model saved to {model_path}")
     print("Model saved to pointnet_model.pth")
