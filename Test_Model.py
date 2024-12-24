@@ -71,8 +71,8 @@ def load_model(model_path, input_dim, output_dim):
 
 if __name__ == "__main__":
     # File paths
-    test_file = '/content/drive/MyDrive/Archive /output_with_rgb1.txt'
-    model_path = '/content/drive/MyDrive/H3D LiDar Data/checkpointsDown/pointnetDown_epoch_12.pth'
+    test_file = '/content/drive/MyDrive/output_with_rgb1 (1).txt'
+    model_path = '/content/drive/MyDrive/pointnetDown_epoch_12.pth'
     output_file = '/content/drive/MyDrive/Archive /output_new1_predictions.txt'
     
     # Load the test dataset
