@@ -9,7 +9,7 @@ from pointnet_ import PointNet2ClsSSG
 import logging
 
 # === Configure Logging ===
-log_file_path = "/content/drive/MyDrive/t1/training_logs.txt"
+log_file_path = "/content/drive/MyDrive/t1/trainingDown_logs.txt"
 logging.basicConfig(filename=log_file_path, level=logging.INFO, format='%(asctime)s - %(message)s')
 
 def log_and_print(message):
@@ -105,7 +105,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
         val_loss, val_accuracy = validate_model(model, val_loader, criterion, device)
 
         # Save model after each epoch
-        epoch_model_path = os.path.join(save_dir, f"pointnet_epoch_{epoch+1}.pth")
+        epoch_model_path = os.path.join(save_dir, f"pointnetDown_epoch_{epoch+1}.pth")
         torch.save(model.state_dict(), epoch_model_path)
         log_and_print(f"Model checkpoint saved to {epoch_model_path}")
 
@@ -140,9 +140,9 @@ if __name__ == "__main__":
     print("Using device:", device)
     
     # Specify File Paths
-    train_file = '/content/drive/MyDrive/t1/Mar18_train.txt'
-    val_file = '/content/drive/MyDrive/t1/Mar18_val.txt'
-    test_file = '/content/drive/MyDrive/t1/Mar18_test.txt'
+    train_file = '/content/drive/MyDrive/H3D LiDar Data/Mar18_train_downsampled.txt'
+    val_file = '/content/drive/MyDrive/H3D LiDar Data/Mar18_val.txt'
+    test_file = '/content/drive/MyDrive/H3D LiDar Data/Mar18_train.txt'
 
     # Dataset and DataLoader
     batch_size = 16
@@ -162,7 +162,7 @@ if __name__ == "__main__":
     model = PointNet2ClsSSG(in_dim=in_dim, out_dim=num_classes, downsample_points=(512, 128))
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     criterion = nn.CrossEntropyLoss()
-    epochs = 10
+    epochs = 50
 
     # Directory for saving checkpoints
     save_dir = "/content/drive/MyDrive/t1/checkpoints"
@@ -175,7 +175,7 @@ if __name__ == "__main__":
 
 
     # Save the trained model
-    model_path = "/content/drive/MyDrive/t1/pointnet_model.pth"
+    model_path = "/content/drive/MyDrive/t1/pointnetDown_model.pth"
     torch.save(model.state_dict(), model_path)
     log_and_print(f"Model saved to {model_path}")
     print("Model saved to pointnet_model.pth")
