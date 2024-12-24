@@ -73,7 +73,7 @@ if __name__ == "__main__":
     # File paths
     test_file = '/content/drive/MyDrive/output_with_rgb1 (1).txt'
     model_path = '/content/drive/MyDrive/pointnetDown_epoch_12.pth'
-    output_file = '/content/drive/MyDrive/Archive /output_new1_predictions.txt'
+    output_file = '/content/drive/MyDrive/output_new1_predictions.txt'
     
     # Load the test dataset
     test_dataset = PointCloudDataset(test_file, points_per_cloud=1024, debug=True)
