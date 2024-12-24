@@ -9,7 +9,7 @@ from pointnet_ import PointNet2ClsSSG
 import logging
 
 # === Configure Logging ===
-log_file_path = "/content/drive/MyDrive/t1/trainingDown_logs.txt"
+log_file_path = "/content/drive/MyDrive/H3D LiDar Data/rainingDown_logs.txt"
 logging.basicConfig(filename=log_file_path, level=logging.INFO, format='%(asctime)s - %(message)s')
 
 def log_and_print(message):
