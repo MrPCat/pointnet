@@ -166,7 +166,7 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss()
 
     # Directory for saving checkpoints
-    save_dir = "/content/drive/MyDrive/t1/checkpoints"
+    save_dir = "/content/drive/MyDrive/Vaihingen /Checkpoints"
     os.makedirs(save_dir, exist_ok=True)
 
     # Train the Model
@@ -175,6 +175,6 @@ if __name__ == "__main__":
     train_model(model, train_loader, val_loader, optimizer, criterion, epochs, device, save_dir)
 
     # Save the Trained Model
-    model_path = "/content/drive/MyDrive/t1/pointnet_model.pth"
+    model_path = "/content/drive/MyDrive/Vaihingen /Checkpoints/pointnet_model.pth"
     torch.save(model.state_dict(), model_path)
     log_and_print(f"Model saved to {model_path}")
