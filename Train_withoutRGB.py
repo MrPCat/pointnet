@@ -145,10 +145,20 @@ if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     log_and_print(f"Using device: {device}")
 
-    # Specify File Paths
-    all_files = glob.glob('/content/drive/MyDrive/Vaihingen/Vaihingen3D_AugmentTraininig_*.pts')  # Match all .pts files
-    train_files = all_files[:9]  # First 9 files for training
-    val_file = all_files[9]  # 10th file for validation
+    import glob
+
+    # Find all files
+    all_files = sorted(glob.glob('/content/drive/MyDrive/Vaihingen/Vaihingen3D_AugmentTraininig_*.pts'))
+
+    if len(all_files) < 10:
+        raise ValueError(f"Expected 10 files (0-9), but found {len(all_files)}: {all_files}")
+
+    train_files = all_files[:9]  # Files 0 to 8 for training
+    val_file = all_files[9]      # File 9 for validation
+
+    print("Training files:", train_files)
+    print("Validation file:", val_file)
+
 
     # Dataset and DataLoader
     batch_size = 16
