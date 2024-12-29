@@ -146,7 +146,7 @@ if __name__ == "__main__":
     log_and_print(f"Using device: {device}")
 
     # Verify directory path
-    dir_path = '/content/drive/MyDrive/Vaihingen/'
+    dir_path = '/content/drive/MyDrive/Vaihingen'
     if not os.path.exists(dir_path):
         raise ValueError(f"Directory does not exist: {dir_path}")
 
