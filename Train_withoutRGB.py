@@ -145,19 +145,23 @@ if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     log_and_print(f"Using device: {device}")
 
-    import glob
+    # Verify directory path
+    dir_path = '/content/drive/MyDrive/Vaihingen/'
+    if not os.path.exists(dir_path):
+        raise ValueError(f"Directory does not exist: {dir_path}")
 
     # Find all files
-    all_files = sorted(glob.glob('/content/drive/MyDrive/Vaihingen/Vaihingen3D_AugmentTraininig_*.pts'))
-
+    all_files = sorted(glob.glob(os.path.join(dir_path, 'Vaihingen3D_AugmentTraininig_*.pts')))
     if len(all_files) < 10:
         raise ValueError(f"Expected 10 files (0-9), but found {len(all_files)}: {all_files}")
 
+    # Split into training and validation
     train_files = all_files[:9]  # Files 0 to 8 for training
     val_file = all_files[9]      # File 9 for validation
 
     print("Training files:", train_files)
     print("Validation file:", val_file)
+
 
 
     # Dataset and DataLoader
