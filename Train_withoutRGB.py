@@ -173,8 +173,8 @@ if __name__ == "__main__":
     # Model, Optimizer, and Loss Function
     in_dim = train_dataset.features.shape[1]  # Extract feature dimensions
     num_classes = len(np.unique(train_dataset.labels))
-    model = PointNet2ClsSSG(in_dim=in_dim, out_dim=num_classes, downsample_points=(512, 128))
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    model = PointNet2ClsSSG(in_dim=in_dim, out_dim=num_classes, downsample_points=(256, 64))
+    optimizer = optim.Adam(model.parameters(), lr=0.0005, weight_decay=1e-4)
     criterion = nn.CrossEntropyLoss()
 
     # Directory for saving checkpoints
