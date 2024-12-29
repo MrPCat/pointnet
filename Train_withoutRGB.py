@@ -38,6 +38,16 @@ class PointCloudDataset(Dataset):
         self.xyz = self.data[:, :3]  # First 3 columns are X, Y, Z
         self.features = self.data[:, 3:-1]  # Columns 4 to second last are features
         self.labels = self.data[:, -1]  # Last column is Classification
+        ##################################
+        ##################################
+        unique_labels = np.unique(self.labels)
+        print(f"Found labels in dataset: {unique_labels}")
+        print(f"Number of unique labels: {len(unique_labels)}")
+        print(f"Label distribution:")
+        for label in unique_labels:
+            count = np.sum(self.labels == label)
+            percentage = (count / len(self.labels)) * 100
+            print(f"Label {label}: {count} points ({percentage:.2f}%)")
 
         # Normalize spatial coordinates
         self.xyz -= np.mean(self.xyz, axis=0)
@@ -45,6 +55,7 @@ class PointCloudDataset(Dataset):
         # Group points into point clouds
         self.points_per_cloud = points_per_cloud
         self.num_clouds = len(self.xyz) // self.points_per_cloud
+        
 
     def __len__(self):
         return self.num_clouds
@@ -160,7 +171,9 @@ if __name__ == "__main__":
 
     print("Training files:", train_files)
     print("Validation file:", val_file)
-
+    #############################################
+    #############################################
+    
 
 
     # Dataset and DataLoader
@@ -181,6 +194,23 @@ if __name__ == "__main__":
     # Directory for saving checkpoints
     save_dir = "/content/drive/MyDrive/Vaihingen_/Checkpoints"
     os.makedirs(save_dir, exist_ok=True)
+    ###############################################################################
+    ###############################################################################
+    # Before creating the model
+    unique_train_labels = np.unique(train_dataset.labels)
+    unique_val_labels = np.unique(val_dataset.labels)
+    
+    print("\nDataset Statistics:")
+    print(f"Training set unique labels: {unique_train_labels}")
+    print(f"Validation set unique labels: {unique_val_labels}")
+    print(f"Input feature dimension: {in_dim}")
+    print(f"Number of classes: {num_classes}")
+    
+    # Verify the labels are what you expect from your filtering
+    if not set(unique_train_labels) == set(unique_val_labels):
+        print("WARNING: Training and validation sets have different labels!")
+        print("Labels only in training:", set(unique_train_labels) - set(unique_val_labels))
+        print("Labels only in validation:", set(unique_val_labels) - set(unique_train_labels))
 
     # Train the Model
     epochs = 80
