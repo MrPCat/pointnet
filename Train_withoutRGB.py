@@ -145,7 +145,7 @@ if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     log_and_print(f"Using device: {device}")
 
-    dir_path = '/content/drive/MyDrive/Vaihingen'
+    dir_path = '/content/drive/MyDrive/Vaihingen/'
     if not os.path.exists(dir_path):
         raise ValueError(f"Directory does not exist: {dir_path}")
 
@@ -179,7 +179,7 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss()
 
     # Directory for saving checkpoints
-    save_dir = "/content/drive/MyDrive/Vaihingen /Checkpoints"
+    save_dir = "/content/drive/MyDrive/Vaihingen/Checkpoints"
     os.makedirs(save_dir, exist_ok=True)
 
     # Train the Model
@@ -188,6 +188,6 @@ if __name__ == "__main__":
     train_model(model, train_loader, val_loader, optimizer, criterion, epochs, device, save_dir)
 
     # Save the Trained Model
-    model_path = "/content/drive/MyDrive/Vaihingen /Checkpoints/pointnet_model.pth"
+    model_path = "/content/drive/MyDrive/Vaihingen/Checkpoints/pointnet_model.pth"
     torch.save(model.state_dict(), model_path)
     log_and_print(f"Model saved to {model_path}")
