@@ -163,7 +163,7 @@ if __name__ == "__main__":
     print("Validation file:", val_file)
 
     # Dataset and DataLoader
-    batch_size = 16
+    batch_size = 8
     train_dataset = PointCloudDataset(train_files, points_per_cloud=1024)
     val_dataset = PointCloudDataset([val_file], points_per_cloud=1024)
 
