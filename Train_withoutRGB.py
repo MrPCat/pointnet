@@ -145,7 +145,7 @@ if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     log_and_print(f"Using device: {device}")
 
-    dir_path = '/content/drive/MyDrive/Vaihingen_/'
+    dir_path = '/content/drive/MyDrive/Vaihingen_/Filtered'
     if not os.path.exists(dir_path):
         raise ValueError(f"Directory does not exist: {dir_path}")
 
