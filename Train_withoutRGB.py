@@ -10,7 +10,7 @@ from pointnet_ import PointNet2ClsSSG
 import logging
 
 # === Configure Logging ===
-log_file_path = "/content/drive/MyDrive/Vaihingen /Checkpoints/training_logs.txt"
+log_file_path = "/content/drive/MyDrive/Vaihingen_/Checkpoints/training_logs.txt"
 logging.basicConfig(filename=log_file_path, level=logging.INFO, format='%(asctime)s - %(message)s')
 
 def log_and_print(message):
