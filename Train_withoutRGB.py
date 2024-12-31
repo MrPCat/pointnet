@@ -45,7 +45,6 @@ class PointCloudDataset(Dataset):
         # Group points into point clouds
         self.points_per_cloud = points_per_cloud
         self.num_clouds = len(self.xyz) // self.points_per_cloud
-        
 
     def __len__(self):
         return self.num_clouds
@@ -153,19 +152,19 @@ if __name__ == "__main__":
     # Find all files
     all_files = sorted(glob.glob(os.path.join(dir_path, 'Vaihingen3D_AugmentTraininig_*.pts')))
     if len(all_files) < 9:
-        raise ValueError(f"Expected 10 files (0-9), but found {len(all_files)}: {all_files}")
+        raise ValueError(f"Expected at least 9 files (0-8), but found {len(all_files)}")
 
     # Split into training and validation
-    train_files = all_files[:8]  # Files 0 to 8 for training
-    val_file = all_files[8]      # File 9 for validation
+    train_files = all_files[:8]  # Files 0 to 7 for training
+    val_file = [all_files[8]]    # File 8 for validation
 
-    print("Training files:", train_files)
-    print("Validation file:", val_file)
-
+    log_and_print(f"Number of training files: {len(train_files)}")
+    log_and_print(f"Number of validation files: {len(val_file)}")
+    
     # Dataset and DataLoader
     batch_size = 16
     train_dataset = PointCloudDataset(train_files, points_per_cloud=1024)
-    val_dataset = PointCloudDataset([val_file], points_per_cloud=1024)
+    val_dataset = PointCloudDataset(val_file, points_per_cloud=1024)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
