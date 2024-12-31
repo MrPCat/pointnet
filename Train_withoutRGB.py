@@ -162,7 +162,7 @@ if __name__ == "__main__":
 
     # Split into training and validation
     train_files = all_files[:17]  # Files 0 to 7 for training
-    val_file = [all_files[17:19]]    # File 8 for validation
+    val_file = [all_files[17:20]]    # File 8 for validation
 
     log_and_print(f"Number of training files: {len(train_files)}")
     log_and_print(f"Number of validation files: {len(val_file)}")
