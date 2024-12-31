@@ -8,6 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 from pointnet_ import PointNetCls, STN
 from pointnet_ import PointNet2ClsSSG
 import logging
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 # === Configure Logging ===
 log_file_path = "/content/drive/MyDrive/Vaihingen_/Checkpoints/training_logs.txt"
@@ -95,7 +96,8 @@ def create_model(in_dim, num_classes):
 # === Training Loop ===
 def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, device, save_dir):
     model.to(device)
-
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5, verbose=True)
+    
     for epoch in range(epochs):
         model.train()
         total_loss = 0
@@ -113,6 +115,9 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
         train_loss = total_loss / len(train_loader)
         val_loss, val_accuracy = validate_model(model, val_loader, criterion, device)
 
+        # Adjust learning rate based on validation loss
+        scheduler.step(val_loss)
+
         # Save model after each epoch
         epoch_model_path = os.path.join(save_dir, f"pointnet_epoch_{epoch+1}.pth")
         torch.save(model.state_dict(), epoch_model_path)
@@ -120,6 +125,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
 
         log_and_print(f"Epoch {epoch+1}/{epochs}, Train Loss: {train_loss:.4f}, "
                       f"Validation Loss: {val_loss:.4f}, Validation Accuracy: {val_accuracy:.2f}%")
+
 
 # === Testing Function ===
 def test_model(model, test_loader, device):
