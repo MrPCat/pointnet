@@ -183,7 +183,7 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss()
 
     # Directory for saving checkpoints
-    save_dir = "/content/drive/MyDrive/Vaihingen_/Checkpoints"
+    save_dir = "/content/drive/MyDrive/Filtered/Checkpoints"
     os.makedirs(save_dir, exist_ok=True)
 
     # Train the Model
