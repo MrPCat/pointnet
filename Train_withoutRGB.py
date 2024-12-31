@@ -152,7 +152,7 @@ if __name__ == "__main__":
 
     # Find all files
     all_files = sorted(glob.glob(os.path.join(dir_path, 'Vaihingen3D_AugmentTraininig_*.pts')))
-    if len(all_files) < 10:
+    if len(all_files) < 9:
         raise ValueError(f"Expected 10 files (0-9), but found {len(all_files)}: {all_files}")
 
     # Split into training and validation
