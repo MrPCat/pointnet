@@ -11,7 +11,7 @@ import logging
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 # === Configure Logging ===
-log_file_path = "/content/drive/MyDrive/Vaihingen_/Checkpoints/training_logs.txt"
+log_file_path = "/content/drive/MyDrive/Filtered/training_logs.txt"
 logging.basicConfig(filename=log_file_path, level=logging.INFO, format='%(asctime)s - %(message)s')
 
 def log_and_print(message):
@@ -151,7 +151,7 @@ if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     log_and_print(f"Using device: {device}")
 
-    dir_path = '/content/drive/MyDrive/Vaihingen_/Filtered'
+    dir_path = '/content/drive/MyDrive/Filtered'
     if not os.path.exists(dir_path):
         raise ValueError(f"Directory does not exist: {dir_path}")
 
@@ -192,6 +192,6 @@ if __name__ == "__main__":
     train_model(model, train_loader, val_loader, optimizer, criterion, epochs, device, save_dir)
 
     # Save the Trained Model
-    model_path = "/content/drive/MyDrive/Vaihingen_/Checkpoints/pointnet_model.pth"
+    model_path = "/content/drive/MyDrive/Filtered/Checkpoints/pointnet_model.pth"
     torch.save(model.state_dict(), model_path)
     log_and_print(f"Model saved to {model_path}")
