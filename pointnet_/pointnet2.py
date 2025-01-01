@@ -80,6 +80,7 @@ def downsample_fps(xyz, n_sample):
     _xyz = rearrange(xyz, 'b d n -> b n d')
     sample_ind = farthest_point_sampling(_xyz, n_sample, start_idx=0)  # (b, k)
     sample_xyz = xyz.gather(-1, repeat(sample_ind, 'b k -> b d k', d=xyz.shape[1]))  # (b, 3, k)
+    
     return SampleResult(None, sample_xyz, sample_ind, None)
 
 
@@ -223,6 +224,10 @@ class PointNet2ClsSSG(nn.Module):
     def forward(self, x, xyz):
         # x: (b, c, n)
         # xyz: (b, 3, n)
+        
+        print("Input xyz shape before transpose:", xyz.shape)
+        print("Input features shape before transpose:", x.shape)       
+        
         xyz1 = downsample_fps(xyz, self.downsample_points[0]).xyz
         x1 = self.sa1(x, xyz, xyz1)
 

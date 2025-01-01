@@ -15,6 +15,10 @@ def default(*vals):
 
 def farthest_point_sampling(x: torch.Tensor, n_sample: int, start_idx: int = None):
     # x: (b, n, 3)
+    print("FPS input shape:", x.shape)
+    print("n_sample:", n_sample)
+    b, n = x.shape[:2]
+    assert n_sample <= n, "not enough points to sample"
     b, n = x.shape[:2]
     assert n_sample <= n, "not enough points to sample"
 
