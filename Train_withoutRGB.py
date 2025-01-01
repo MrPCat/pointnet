@@ -148,8 +148,8 @@ if __name__ == "__main__":
         torch.cuda.manual_seed(42)
     
     # Configuration
-    points_per_cloud = 256
-    batch_size = 32
+    points_per_cloud = 512
+    batch_size = 64
     dir_path = '/content/drive/MyDrive/Filtered'
     save_dir = os.path.join(dir_path, 'Checkpoints')
     os.makedirs(save_dir, exist_ok=True)
@@ -179,12 +179,10 @@ if __name__ == "__main__":
         model = PointNet2ClsSSG(
         in_dim=in_dim,
         out_dim=num_classes,
-        downsample_points=(128, 64),  # Ensure these values are ≤ points_per_cloud
-        radii=(0.2, 0.4),
+        downsample_points=(256, 128),  # These values should be ≤ points_per_cloud
+        radii=(0.4, 0.8),
         ks=(64, 128)
-    )
-
-        
+        )
         optimizer = optim.Adam(model.parameters(), lr=0.001)
         criterion = nn.CrossEntropyLoss()
         
