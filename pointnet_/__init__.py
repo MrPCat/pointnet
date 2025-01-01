@@ -6,5 +6,6 @@ from .pointnet2 import (
     PointNet2PartSegMSG,
     PointNet2SegSSG,
     PointNet2SegMSG,
+    PointNet2ClsSSGv1,
     enable_taichi
 )
