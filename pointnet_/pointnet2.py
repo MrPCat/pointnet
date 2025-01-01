@@ -285,7 +285,7 @@ class PointNet2ClsSSG(nn.Module):
         in_dim,
         out_dim,
         *,
-        downsample_points=(1024, 256),  # Adjusted for sparse data
+        downsample_points=(256, 128),  # Adjusted for sparse data
         radii=(0.4, 0.8),  # Larger radii for sparse data
         ks=(64, 128),  # Increase neighbors to account for sparsity
         head_norm=True,
@@ -330,26 +330,29 @@ class PointNet2ClsSSG(nn.Module):
 
     def forward(self, x, xyz):
         # Input: x (features), xyz (coordinates)
-        # xyz1: Downsampled coordinates
+
+        # First downsample step
+        if xyz.shape[1] < self.downsample_points[0]:
+            raise ValueError(f"Not enough points for first downsampling: {xyz.shape[1]} points available, {self.downsample_points[0]} required.")
         xyz1 = downsample_fps(xyz, self.downsample_points[0]).xyz
         x1 = self.sa1(x, xyz, xyz1)
 
-        # xyz2: Further downsampled coordinates
+        # Second downsample step
+        if xyz1.shape[1] < self.downsample_points[1]:
+            raise ValueError(f"Not enough points for second downsampling: {xyz1.shape[1]} points available, {self.downsample_points[1]} required.")
         xyz2 = downsample_fps(xyz1, self.downsample_points[1]).xyz
         x2 = self.sa2(x1, xyz1, xyz2)
 
         # Global feature extraction
         x3 = self.global_sa(x2)
-        out = x3.max(-1)[0]
+        out = x3.max(-1)[0]  # Global max pooling
 
         # Apply normalization and activation
         out = self.act(self.norm(out))
 
-        # Pass through the head for classification
+        # Pass through the classification head
         out = self.head(out)
         return out
-
-
 
 # FOR Finetuning the files there 
 
