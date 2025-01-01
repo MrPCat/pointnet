@@ -8,7 +8,7 @@ from pointnet_ import PointNetCls, STN
 from pointnet_ import PointNet2ClsSSG 
 import logging
 
-# === Configure Logging ===
+# === Configure Logging =====
 log_file_path = "/content/drive/MyDrive/H3D LiDar Data/rainingDown_logs.txt"
 logging.basicConfig(filename=log_file_path, level=logging.INFO, format='%(asctime)s - %(message)s')
 
