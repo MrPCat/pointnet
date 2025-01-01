@@ -5,11 +5,11 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from pointnet_ import PointNetCls, STN
-from pointnet_ import PointNet2ClsSSG 
+from pointnet_ import PointNet2ClsSSGv1 
 import logging
 
-# === Configure Logging =====
-log_file_path = "/content/drive/MyDrive/H3D LiDar Data/rainingDown_logs.txt"
+# === Configure Logging ===
+log_file_path = "/content/drive/MyDrive//training_logs.txt"
 logging.basicConfig(filename=log_file_path, level=logging.INFO, format='%(asctime)s - %(message)s')
 
 def log_and_print(message):
@@ -105,7 +105,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
         val_loss, val_accuracy = validate_model(model, val_loader, criterion, device)
 
         # Save model after each epoch
-        epoch_model_path = os.path.join(save_dir, f"pointnetDown_epoch_{epoch+1}.pth")
+        epoch_model_path = os.path.join(save_dir, f"pointnet_epoch_{epoch+1}.pth")
         torch.save(model.state_dict(), epoch_model_path)
         log_and_print(f"Model checkpoint saved to {epoch_model_path}")
 
@@ -141,7 +141,7 @@ if __name__ == "__main__":
     
     # Specify File Paths
     train_file = '/content/drive/MyDrive/H3D LiDar Data/Mar18_train_downsampled.txt'
-    val_file = '//content/drive/MyDrive/H3D LiDar Data/Mar18_val_downsampled.txt'
+    val_file = '/content/drive/MyDrive/H3D LiDar Data/Mar18_val_downsampled.txt'
     test_file = '/content/drive/MyDrive/H3D LiDar Data/Mar18_test.txt'
 
     # Dataset and DataLoader
@@ -159,13 +159,57 @@ if __name__ == "__main__":
     print(f"number of in_dim is {in_dim}")
     num_classes = len(np.unique(train_dataset.labels))
 
-    model = PointNet2ClsSSG(in_dim=in_dim, out_dim=num_classes, downsample_points=(512, 128))
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    #model = PointNet2ClsSSG(in_dim=in_dim, out_dim=num_classes, downsample_points=(512, 128))
+    # Define hyperparameters in train.py
+    downsample_points = (128, 32)  # Adjusted for sparse data
+    radii = (0.4, 0.8)  # Increased radius for sparse data
+    ks = (16, 32)  # Reduced neighbors due to sparsity
+    dropout = 0.5  # Regularization for better generalization
+    head_norm = True  # Use BatchNorm in classification head
+
+    # Create the model and pass the values
+    # Create the model and pass the values
+    model = PointNet2ClsSSGv1(
+        in_dim=in_dim,
+        out_dim=num_classes,
+        downsample_points=downsample_points,
+        radii=radii,
+        ks=ks,
+        dropout=dropout,
+        head_norm=head_norm)
+
+    # Load pretrained weights
+    pretrained_path = "/content/drive/MyDrive/Archive /1. first attempt with RGB and high Accuracy there /pointnet_model.pth"  # Update path to your pretrained model
+    if os.path.exists(pretrained_path):
+        log_and_print(f"Loading pretrained weights from {pretrained_path}")
+        model.load_state_dict(torch.load(pretrained_path, map_location=device))
+    else:
+        log_and_print(f"Pretrained model not found at {pretrained_path}, proceeding without pretrained weights")
+
+    # Freeze feature extraction layers
+    for name, param in model.named_parameters():
+        if "sa1" in name or "sa2" in name:
+            param.requires_grad = False
+
+    # Ensure classification head and global feature layers are trainable
+    for name, param in model.named_parameters():
+        if "global_sa" in name or "head" in name:
+            param.requires_grad = True
+
+
+
+    #optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(
+    filter(lambda p: p.requires_grad, model.parameters()),
+    lr=1e-4,
+    weight_decay=1e-5  # Optional regularization
+)
+
     criterion = nn.CrossEntropyLoss()
     epochs = 50
 
     # Directory for saving checkpoints
-    save_dir = "/content/drive/MyDrive/H3D LiDar Data/checkpointsDown"
+    save_dir = "/content/drive/MyDrive/H3D LiDar Data/checkpoints"
     os.makedirs(save_dir, exist_ok=True)
 
     # Training with Validation
@@ -175,7 +219,7 @@ if __name__ == "__main__":
 
 
     # Save the trained model
-    model_path = "/content/drive/MyDrive/H3D LiDar Data/pointnetDown_model.pth"
+    model_path = "/content/drive/MyDrive/H3D LiDar Data/checkpoints/pointnet_model.pth"
     torch.save(model.state_dict(), model_path)
     log_and_print(f"Model saved to {model_path}")
     print("Model saved to pointnet_model.pth")
