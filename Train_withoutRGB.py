@@ -177,12 +177,13 @@ if __name__ == "__main__":
         num_classes = len(np.unique(train_dataset.processed_labels))
         
         model = PointNet2ClsSSG(
-            in_dim=in_dim,
-            out_dim=num_classes,
-            downsample_points=(256, 128),
-            radii=(0.2, 0.4),
-            ks=(64, 128)
-        )
+        in_dim=in_dim,
+        out_dim=num_classes,
+        downsample_points=(128, 64),  # Ensure these values are ≤ points_per_cloud
+        radii=(0.2, 0.4),
+        ks=(64, 128)
+    )
+
         
         optimizer = optim.Adam(model.parameters(), lr=0.001)
         criterion = nn.CrossEntropyLoss()
