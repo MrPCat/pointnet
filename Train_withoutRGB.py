@@ -5,12 +5,18 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
+from pointnet_ import PointNetCls, STN
 from pointnet_ import PointNet2ClsSSG
 import logging
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
+# Configure Logging
+log_file_path = "/content/drive/MyDrive/Filtered/training_logs.txt"
+logging.basicConfig(filename=log_file_path, level=logging.INFO, format='%(asctime)s - %(message)s')
+
+def log_and_print(message):
+    print(message)
+    logging.info(message)
 
 class PointCloudDataset(Dataset):
     def __init__(self, file_list, points_per_cloud=256):
@@ -18,8 +24,17 @@ class PointCloudDataset(Dataset):
         self.processed_clouds = []
         self.processed_labels = []
         
+        total_points = 0
+        cloud_sizes = []
+        
         for file_path in file_list:
             data = np.loadtxt(file_path)
+            if data.shape[1] != 7:
+                raise ValueError(f"Expected 7 columns but got {data.shape[1]} in {file_path}")
+                
+            total_points += len(data)
+            cloud_sizes.append(len(data))
+            
             n_chunks = len(data) // points_per_cloud
             for i in range(n_chunks):
                 chunk = data[i * points_per_cloud:(i + 1) * points_per_cloud]
@@ -27,14 +42,20 @@ class PointCloudDataset(Dataset):
                 features = chunk[:, 3:-1]
                 labels = chunk[:, -1].astype(np.int64)
                 
-                # Normalize coordinates
+                # Normalize per chunk
                 xyz = (xyz - np.mean(xyz, axis=0)) / (np.std(xyz, axis=0) + 1e-6)
+                
                 self.processed_clouds.append((xyz, features))
                 self.processed_labels.append(np.bincount(labels).argmax())
         
         self.processed_labels = np.array(self.processed_labels)
-        logging.info(f"Dataset initialized with {len(self.processed_clouds)} point clouds")
-        logging.info(f"Unique labels: {np.unique(self.processed_labels)}")
+        
+        log_and_print(f"Total number of points: {total_points}")
+        log_and_print(f"Cloud sizes: {cloud_sizes}")
+        log_and_print(f"Minimum points in a cloud: {min(cloud_sizes)}")
+        log_and_print(f"Maximum points in a cloud: {max(cloud_sizes)}")
+        log_and_print(f"Dataset initialized with {len(self.processed_clouds)} point clouds")
+        log_and_print(f"Unique labels: {np.unique(self.processed_labels)}")
 
     def __len__(self):
         return len(self.processed_clouds)
@@ -93,20 +114,31 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, d
         
         if val_accuracy > best_val_acc:
             best_val_acc = val_accuracy
+            best_model_path = os.path.join(save_dir, "best_model.pth")
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'val_accuracy': val_accuracy,
-            }, os.path.join(save_dir, "best_model.pth"))
-            logging.info(f"New best model saved with validation accuracy: {val_accuracy:.2f}%")
+            }, best_model_path)
+            log_and_print(f"New best model saved with validation accuracy: {val_accuracy:.2f}%")
         
         train_accuracy = 100 * train_correct / train_total
-        logging.info(f"Epoch {epoch+1}/{epochs}")
-        logging.info(f"Train Loss: {total_train_loss/len(train_loader):.4f}, Accuracy: {train_accuracy:.2f}%")
-        logging.info(f"Val Loss: {val_loss:.4f}, Accuracy: {val_accuracy:.2f}%")
+        log_and_print(f"Epoch {epoch+1}/{epochs}")
+        log_and_print(f"Train Loss: {total_train_loss/len(train_loader):.4f}, Accuracy: {train_accuracy:.2f}%")
+        log_and_print(f"Val Loss: {val_loss:.4f}, Accuracy: {val_accuracy:.2f}%")
         
         scheduler.step(val_loss)
+        
+        # Save checkpoint every 10 epochs
+        if (epoch + 1) % 10 == 0:
+            checkpoint_path = os.path.join(save_dir, f"checkpoint_epoch_{epoch+1}.pth")
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'val_accuracy': val_accuracy,
+            }, checkpoint_path)
 
 if __name__ == "__main__":
     # Set random seeds
@@ -123,11 +155,14 @@ if __name__ == "__main__":
     os.makedirs(save_dir, exist_ok=True)
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    logging.info(f"Using device: {device}")
+    log_and_print(f"Using device: {device}")
     
     try:
         # Dataset setup
         all_files = sorted(glob.glob(os.path.join(dir_path, 'Vaihingen3D_AugmentTraininig_*.pts')))
+        if len(all_files) < 20:
+            raise ValueError(f"Expected at least 20 files, but found {len(all_files)}")
+        
         train_files = all_files[:19]
         val_files = [all_files[19]]
         
@@ -138,26 +173,31 @@ if __name__ == "__main__":
         val_loader = DataLoader(val_dataset, batch_size=batch_size)
         
         # Model setup
+        in_dim = train_dataset.processed_clouds[0][1].shape[1]
+        num_classes = len(np.unique(train_dataset.processed_labels))
+        
         model = PointNet2ClsSSG(
-            in_dim=train_dataset.processed_clouds[0][1].shape[1],
-            out_dim=len(np.unique(train_dataset.processed_labels)),
-            downsample_points=(128, 64),  # Must be smaller than input points
+            in_dim=in_dim,
+            out_dim=num_classes,
+            downsample_points=(256, 128),
             radii=(0.2, 0.4),
-            ks=(16, 16)
+            ks=(64, 128)
         )
         
         optimizer = optim.Adam(model.parameters(), lr=0.001)
         criterion = nn.CrossEntropyLoss()
         
-        logging.info("Starting training...")
+        log_and_print("Starting training...")
         train_model(model, train_loader, val_loader, optimizer, criterion, 80, device, save_dir)
         
         # Save final model
+        final_model_path = os.path.join(save_dir, "final_model.pth")
         torch.save({
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
-        }, os.path.join(save_dir, "final_model.pth"))
+        }, final_model_path)
+        log_and_print(f"Final model saved to {final_model_path}")
         
     except Exception as e:
-        logging.error(f"Error during execution: {str(e)}")
+        log_and_print(f"Error during execution: {str(e)}")
         raise
