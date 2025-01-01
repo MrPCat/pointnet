@@ -103,7 +103,7 @@ class SABlock(nn.Module):
         self.conv_blocks = nn.ModuleList()
         self.last_norms = nn.ModuleList()
         for i, (dims, radius, k) in enumerate(zip(self.dims_list, self.radius_list, self.k_list)):
-            dims = [in_dim + 3] + dims
+            dims = [in_dim] + dims  # Remove the +3 to avoid concatenation mismatch
             conv = nn.Sequential(*[
                 nn.Sequential(nn.Conv2d(in_d, out_d, 1, bias=False),
                               nn.BatchNorm2d(out_d),
@@ -281,78 +281,78 @@ class UpBlock(nn.Module):
 
 class PointNet2ClsSSG(nn.Module):
     def __init__(
-        self,
-        in_dim,
-        out_dim,
-        *,
-        downsample_points=(256, 128),  # Adjusted for sparse data
-        radii=(0.4, 0.8),  # Larger radii for sparse data
-        ks=(64, 128),  # Increase neighbors to account for sparsity
-        head_norm=True,
-        dropout=0.3,
+            self,
+            in_dim, 
+            out_dim,
+            *,
+            downsample_points=(256, 128),
+            radii=(0.4, 0.8),
+            ks=(64, 128),
+            head_norm=True,
+            dropout=0.3,
     ):
         super().__init__()
+        self.in_dim = in_dim  # Store in_dim as an attribute
         self.downsample_points = downsample_points
 
         # First Set Abstraction Block
         self.sa1 = SABlock(in_dim, [128, 128, 256], radii[0], ks[0])
 
-        # Second Set Abstraction Block
+            # Second Set Abstraction Block
         self.sa2 = SABlock(256, [256, 256, 512], radii[1], ks[1])
 
-        # Global Set Abstraction
+            # Global Set Abstraction
         self.global_sa = nn.Sequential(
             nn.Conv1d(512, 512, 1, bias=False),
-            nn.BatchNorm1d(512),
-            nn.GELU(),
-            nn.Conv1d(512, 1024, 1, bias=False),
-            nn.BatchNorm1d(1024),
-            nn.GELU(),
-            nn.Conv1d(1024, 2048, 1, bias=False),
-        )
+                nn.BatchNorm1d(512),
+                nn.GELU(),
+                nn.Conv1d(512, 1024, 1, bias=False),
+                nn.BatchNorm1d(1024),
+                nn.GELU(),
+                nn.Conv1d(1024, 2048, 1, bias=False),
+            )
 
         norm = nn.BatchNorm1d if head_norm else nn.Identity
         self.norm = norm(2048)
         self.act = nn.GELU()
 
-        # Classification Head
+            # Classification Head
         self.head = nn.Sequential(
             nn.Linear(2048, 1024, bias=False),
-            norm(1024),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(1024, 512, bias=False),
-            norm(512),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(512, out_dim)
-        )
+                norm(1024),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(1024, 512, bias=False),
+                norm(512),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(512, out_dim)
+            )
 
-    def forward(self, x, xyz):
-        # Input: x (features), xyz (coordinates)
+    def forward(self, data):
+        """
+        Args:
+            data: A tensor of shape (B, N, C), where:
+                - B is the batch size
+                - N is the number of points in each point cloud
+                - C is the number of channels (features + coordinates) 
+        """
+        features = data[:, :, :self.in_dim]  # Extract features
+        xyz = data[:, :, self.in_dim:]     # Extract coordinates
 
-        # First downsample step
-        if xyz.shape[1] < self.downsample_points[0]:
-            raise ValueError(f"Not enough points for first downsampling: {xyz.shape[1]} points available, {self.downsample_points[0]} required.")
+        print(f"Feature shape: {features.shape}, Coordinate shape: {xyz.shape}") 
+
         xyz1 = downsample_fps(xyz, self.downsample_points[0]).xyz
-        x1 = self.sa1(x, xyz, xyz1)
+        x1 = self.sa1(features, xyz, xyz1)
 
-        # Second downsample step
-        if xyz1.shape[1] < self.downsample_points[1]:
-            raise ValueError(f"Not enough points for second downsampling: {xyz1.shape[1]} points available, {self.downsample_points[1]} required.")
         xyz2 = downsample_fps(xyz1, self.downsample_points[1]).xyz
         x2 = self.sa2(x1, xyz1, xyz2)
 
-        # Global feature extraction
         x3 = self.global_sa(x2)
-        out = x3.max(-1)[0]  # Global max pooling
+        out = x3.max(-1)[0]
+        return self.head(out)
 
-        # Apply normalization and activation
-        out = self.act(self.norm(out))
 
-        # Pass through the classification head
-        out = self.head(out)
-        return out
 
 # FOR Finetuning the files there 
 

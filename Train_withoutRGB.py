@@ -1,202 +1,233 @@
 import os
 import numpy as np
-import glob
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
-from pointnet_ import PointNetCls, STN
+from torch.utils.data import DataLoader, Dataset
+from torch.optim.lr_scheduler import StepLR
 from pointnet_ import PointNet2ClsSSG
-import logging
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-
-# Configure Logging
-log_file_path = "/content/drive/MyDrive/Filtered/training_logs.txt"
-logging.basicConfig(filename=log_file_path, level=logging.INFO, format='%(asctime)s - %(message)s')
-
-def log_and_print(message):
-    print(message)
-    logging.info(message)
 
 class PointCloudDataset(Dataset):
-    def __init__(self, file_list, points_per_cloud=256):
-        self.points_per_cloud = points_per_cloud
-        self.processed_clouds = []
-        self.processed_labels = []
-        
-        total_points = 0
-        cloud_sizes = []
-        
-        for file_path in file_list:
-            data = np.loadtxt(file_path)
-            if data.shape[1] != 7:
-                raise ValueError(f"Expected 7 columns but got {data.shape[1]} in {file_path}")
-                
-            total_points += len(data)
-            cloud_sizes.append(len(data))
+    def __init__(self, file_path, chunk_size=2048):
+        self.chunk_size = chunk_size
+        data = np.loadtxt(file_path)
+        if len(data.shape) == 1:
+            data = data.reshape(1, -1)
             
-            n_chunks = len(data) // points_per_cloud
-            for i in range(n_chunks):
-                chunk = data[i * points_per_cloud:(i + 1) * points_per_cloud]
-                xyz = chunk[:, :3]
-                features = chunk[:, 3:-1]
-                labels = chunk[:, -1].astype(np.int64)
-                
-                # Normalize per chunk
-                xyz = (xyz - np.mean(xyz, axis=0)) / (np.std(xyz, axis=0) + 1e-6)
-                
-                self.processed_clouds.append((xyz, features))
-                self.processed_labels.append(np.bincount(labels).argmax())
+        xyz = data[:, :3].astype(np.float32)
+        features = data[:, 3:6].astype(np.float32)
+        self.label = data[0, -1].astype(np.int64)  # Using first point's label as scene label
         
-        self.processed_labels = np.array(self.processed_labels)
+        # Calculate number of full chunks and remaining points
+        n_points = len(xyz)
+        n_full_chunks = n_points // chunk_size
+        remaining_points = n_points % chunk_size
         
-        log_and_print(f"Total number of points: {total_points}")
-        log_and_print(f"Cloud sizes: {cloud_sizes}")
-        log_and_print(f"Minimum points in a cloud: {min(cloud_sizes)}")
-        log_and_print(f"Maximum points in a cloud: {max(cloud_sizes)}")
-        log_and_print(f"Dataset initialized with {len(self.processed_clouds)} point clouds")
-        log_and_print(f"Unique labels: {np.unique(self.processed_labels)}")
+        # Split points into chunks
+        self.chunks_xyz = []
+        self.chunks_features = []
+        
+        # First, create all full chunks
+        for i in range(n_full_chunks):
+            start_idx = i * chunk_size
+            end_idx = (i + 1) * chunk_size
+            self.chunks_xyz.append(xyz[start_idx:end_idx])
+            self.chunks_features.append(features[start_idx:end_idx])
+        
+        # Handle the last incomplete chunk if it exists
+        if remaining_points > 0:
+            # Take all remaining points
+            last_chunk_xyz = xyz[-remaining_points:]
+            last_chunk_features = features[-remaining_points:]
+            
+            # Calculate how many points we need to add
+            points_needed = chunk_size - remaining_points
+            
+            # Randomly select indices from the same file to fill the last chunk
+            indices = np.random.choice(n_points - remaining_points, points_needed, replace=True)
+            
+            # Add the selected points to complete the last chunk
+            last_chunk_xyz = np.vstack([last_chunk_xyz, xyz[indices]])
+            last_chunk_features = np.vstack([last_chunk_features, features[indices]])
+            
+            self.chunks_xyz.append(last_chunk_xyz)
+            self.chunks_features.append(last_chunk_features)
+        
+        self.n_chunks = len(self.chunks_xyz)
+        print(f"Loaded {n_points} points from {file_path}")
+        print(f"Created {self.n_chunks} chunks of {chunk_size} points each")
 
     def __len__(self):
-        return len(self.processed_clouds)
+        return self.n_chunks
 
     def __getitem__(self, idx):
-        xyz, features = self.processed_clouds[idx]
-        return (torch.tensor(features, dtype=torch.float32),
-                torch.tensor(xyz, dtype=torch.float32),
-                torch.tensor(self.processed_labels[idx], dtype=torch.long))
+        return (torch.from_numpy(self.chunks_xyz[idx]),
+                torch.from_numpy(self.chunks_features[idx]),
+                self.label)
 
-def validate_model(model, data_loader, criterion, device):
+def collate_fn(batch):
+    xyz_list = []
+    features_list = []
+    labels_list = []
+    
+    for xyz, features, label in batch:
+        xyz_list.append(xyz)
+        features_list.append(features)
+        labels_list.append(label)
+    
+    xyz_batch = torch.stack(xyz_list)
+    features_batch = torch.stack(features_list)
+    labels_batch = torch.tensor(labels_list, dtype=torch.int64)
+    
+    return xyz_batch, features_batch, labels_batch
+# Load all dataset files
+def load_datasets(file_dir):
+    files = [os.path.join(file_dir, f) for f in os.listdir(file_dir) if f.endswith('.pts')]
+    datasets = []
+    for f in files:
+        try:
+            dataset = PointCloudDataset(f)
+            datasets.append(dataset)
+        except Exception as e:
+            print(f"Error loading {f}: {str(e)}")
+    return datasets
+
+# Training loop
+def train(model, dataloader, optimizer, criterion, device):
+    model.train()
+    total_loss = 0
+    correct = 0
+    total = 0
+
+    for xyz, features, labels in dataloader:
+        # Transpose the data to match model's expected format
+        xyz = xyz.transpose(1, 2)  # from (b, n, 3) to (b, 3, n)
+        features = features.transpose(1, 2)  # from (b, n, c) to (b, c, n)
+        
+        xyz, features, labels = xyz.to(device), features.to(device), labels.to(device)
+        optimizer.zero_grad()
+
+        # Note: model expects features first, then xyz
+        outputs = model(features, xyz)  # Changed order here
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+
+        total_loss += loss.item()
+        preds = outputs.argmax(dim=1)
+        correct += (preds == labels).sum().item()
+        total += labels.size(0)
+
+    accuracy = correct / total
+    return total_loss / len(dataloader), accuracy
+
+# Evaluation loop
+def evaluate(model, dataloader, criterion, device):
     model.eval()
     total_loss = 0
     correct = 0
     total = 0
-    
-    with torch.no_grad():
-        for features, xyz, labels in data_loader:
-            features, xyz, labels = features.to(device), xyz.to(device), labels.to(device)
-            logits = model(features, xyz)
-            loss = criterion(logits, labels)
-            total_loss += loss.item()
-            
-            predicted = torch.argmax(logits, dim=1)
-            correct += (predicted == labels).sum().item()
-            total += labels.size(0)
-    
-    return total_loss / len(data_loader), 100 * correct / total
 
-def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, device, save_dir):
-    model.to(device)
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5, verbose=True)
-    best_val_acc = 0
+    with torch.no_grad():
+        for xyz, features, labels in dataloader:
+            # Transpose the data to match model's expected format
+            xyz = xyz.transpose(1, 2)  # from (b, n, 3) to (b, 3, n)
+            features = features.transpose(1, 2)  # from (b, n, c) to (b, c, n)
+            
+            xyz, features, labels = xyz.to(device), features.to(device), labels.to(device)
+
+            # Note: model expects features first, then xyz
+            outputs = model(features, xyz)  # Changed order here
+            loss = criterion(outputs, labels)
+            total_loss += loss.item()
+            preds = outputs.argmax(dim=1)
+            correct += (preds == labels).sum().item()
+            total += labels.size(0)
+
+    accuracy = correct / total
+    return total_loss / len(dataloader), accuracy
+
+
+def main():
+    # Configuration
+    data_dir = r"C:\\Farshid\\Uni\\Semesters\\Thesis\\Data\\Vaihingen\\Vaihingen\\Augmentation"
+    batch_size = 4
+    num_epochs = 20
+    learning_rate = 0.001
+    step_size = 5
+    gamma = 0.5
+    chunk_size = 1024  # Size of each point cloud chunk
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+
+    # Load datasets
+    files = [os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.endswith('.pts')]
+    datasets = [PointCloudDataset(f, chunk_size=chunk_size) for f in files]
     
-    for epoch in range(epochs):
-        model.train()
-        total_train_loss = 0
-        train_correct = 0
-        train_total = 0
+    # Get feature dimension from first chunk of first dataset
+    feature_dim = datasets[0].chunks_features[0].shape[1]
+    print(f"Feature dimension: {feature_dim}")
+    
+    # Split datasets
+    train_datasets = datasets[:19]
+    val_dataset = datasets[19]
+
+    train_loader = DataLoader(
+        torch.utils.data.ConcatDataset(train_datasets), 
+        batch_size=batch_size, 
+        shuffle=True, 
+        collate_fn=collate_fn
+    )
+    val_loader = DataLoader(
+        val_dataset, 
+        batch_size=batch_size, 
+        shuffle=False, 
+        collate_fn=collate_fn
+    )
+
+    # Model initialization
+    in_dim = feature_dim
+    out_dim = max([ds.label for ds in datasets]) + 1
+    model = PointNet2ClsSSG(
+        in_dim=in_dim,
+        out_dim=out_dim,
+        downsample_points=[1024, 256],
+    )
+    model.to(device)
+    
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    scheduler = StepLR(optimizer, step_size=step_size, gamma=gamma)
+
+    # Training loop
+    best_val_acc = 0.0
+    for epoch in range(num_epochs):
+        # Use the existing train and evaluate functions
+        train_loss, train_acc = train(model, train_loader, optimizer, criterion, device)
+        val_loss, val_acc = evaluate(model, val_loader, criterion, device)
         
-        for features, xyz, labels in train_loader:
-            features, xyz, labels = features.to(device), xyz.to(device), labels.to(device)
-            
-            optimizer.zero_grad()
-            logits = model(features, xyz)
-            loss = criterion(logits, labels)
-            loss.backward()
-            optimizer.step()
-            
-            total_train_loss += loss.item()
-            predicted = torch.argmax(logits, dim=1)
-            train_correct += (predicted == labels).sum().item()
-            train_total += labels.size(0)
+        print(f"Epoch {epoch+1}/{num_epochs}")
+        print(f"Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}")
+        print(f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}")
         
-        val_loss, val_accuracy = validate_model(model, val_loader, criterion, device)
-        
-        if val_accuracy > best_val_acc:
-            best_val_acc = val_accuracy
-            best_model_path = os.path.join(save_dir, "best_model.pth")
+        if val_acc > best_val_acc:
+            best_val_acc = val_acc
+            save_path = os.path.join(data_dir, 'checkpoints', 'best_model.pth')
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-                'val_accuracy': val_accuracy,
-            }, best_model_path)
-            log_and_print(f"New best model saved with validation accuracy: {val_accuracy:.2f}%")
+                'val_acc': val_acc,
+            }, save_path)
+            print(f"Saved best model with validation accuracy: {val_acc:.4f}")
         
-        train_accuracy = 100 * train_correct / train_total
-        log_and_print(f"Epoch {epoch+1}/{epochs}")
-        log_and_print(f"Train Loss: {total_train_loss/len(train_loader):.4f}, Accuracy: {train_accuracy:.2f}%")
-        log_and_print(f"Val Loss: {val_loss:.4f}, Accuracy: {val_accuracy:.2f}%")
-        
-        scheduler.step(val_loss)
-        
-        # Save checkpoint every 10 epochs
-        if (epoch + 1) % 10 == 0:
-            checkpoint_path = os.path.join(save_dir, f"checkpoint_epoch_{epoch+1}.pth")
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'val_accuracy': val_accuracy,
-            }, checkpoint_path)
+        scheduler.step()
+        print("-" * 50)
+
+    print("Training completed!")
+    print(f"Best validation accuracy: {best_val_acc:.4f}")
 
 if __name__ == "__main__":
-    # Set random seeds
-    torch.manual_seed(42)
-    np.random.seed(42)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(42)
-    
-    # Configuration
-    points_per_cloud = 512
-    batch_size = 64
-    dir_path = '/content/drive/MyDrive/Filtered'
-    save_dir = os.path.join(dir_path, 'Checkpoints')
-    os.makedirs(save_dir, exist_ok=True)
-    
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    log_and_print(f"Using device: {device}")
-    
-    try:
-        # Dataset setup
-        all_files = sorted(glob.glob(os.path.join(dir_path, 'Vaihingen3D_AugmentTraininig_*.pts')))
-        if len(all_files) < 20:
-            raise ValueError(f"Expected at least 20 files, but found {len(all_files)}")
-        
-        train_files = all_files[:19]
-        val_files = [all_files[19]]
-        
-        train_dataset = PointCloudDataset(train_files, points_per_cloud=points_per_cloud)
-        val_dataset = PointCloudDataset(val_files, points_per_cloud=points_per_cloud)
-        
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-        val_loader = DataLoader(val_dataset, batch_size=batch_size)
-        
-        # Model setup
-        in_dim = train_dataset.processed_clouds[0][1].shape[1]
-        num_classes = len(np.unique(train_dataset.processed_labels))
-        
-        model = PointNet2ClsSSG(
-        in_dim=in_dim,
-        out_dim=num_classes,
-        downsample_points=(256, 128),  # These values should be ≤ points_per_cloud
-        radii=(0.4, 0.8),
-        ks=(64, 128)
-        )
-        optimizer = optim.Adam(model.parameters(), lr=0.001)
-        criterion = nn.CrossEntropyLoss()
-        
-        log_and_print("Starting training...")
-        train_model(model, train_loader, val_loader, optimizer, criterion, 80, device, save_dir)
-        
-        # Save final model
-        final_model_path = os.path.join(save_dir, "final_model.pth")
-        torch.save({
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-        }, final_model_path)
-        log_and_print(f"Final model saved to {final_model_path}")
-        
-    except Exception as e:
-        log_and_print(f"Error during execution: {str(e)}")
-        raise
+    main()

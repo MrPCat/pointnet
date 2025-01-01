@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 from einops import repeat, rearrange
 
@@ -42,41 +43,39 @@ def default(*vals):
 #     return sel_idx
 
 ### new Farthest function
+import torch
+
 def farthest_point_sampling(x, n_sample, start_idx=0):
     """
     Perform farthest point sampling on a batch of point clouds.
 
     Parameters:
-    - x (numpy.ndarray): Input points of shape (b, n, 3), where `b` is batch size, `n` is number of points.
+    - x (torch.Tensor): Input points of shape (b, n, 3), where `b` is batch size, `n` is number of points.
     - n_sample (int): Number of points to sample.
     - start_idx (int): Starting index for sampling (default: 0).
 
     Returns:
-    - numpy.ndarray: Indices of sampled points of shape (b, n_sample).
+    - torch.Tensor: Indices of sampled points of shape (b, n_sample).
     """
-    b, n = x.shape[:2]
+    b, n, _ = x.shape
 
     # Handle case where n_sample exceeds available points
     if n_sample > n:
         print(f"Warning: Requested {n_sample} points, but only {n} available. Using all points instead.")
         n_sample = n  # Use all points if not enough points are available
 
-    # Initialize arrays
-    idx = np.zeros((b, n_sample), dtype=np.int32)  # To store sampled indices
-    distances = np.ones((b, n), dtype=np.float32) * 1e10  # Max distances
-    farthest = np.random.randint(0, n, size=(b,))  # Randomly initialize farthest point
+    idx = torch.zeros((b, n_sample), dtype=torch.int64, device=x.device)  # To store sampled indices
+    distances = torch.ones((b, n), dtype=torch.float32, device=x.device) * 1e10  # Max distances
+    farthest = torch.randint(0, n, (b,), device=x.device)  # Randomly initialize farthest point
 
-    # Perform sampling
     for i in range(n_sample):
         idx[:, i] = farthest
-        centroid = x[np.arange(b), farthest, :].reshape(b, 1, -1)  # Selected farthest point
-        dist = np.sum((x - centroid) ** 2, axis=-1)  # Compute squared distances
-        distances = np.minimum(distances, dist)  # Update minimum distances
-        farthest = np.argmax(distances, axis=-1)  # Select next farthest point
+        centroid = x[torch.arange(b), farthest, :].unsqueeze(1)  # Shape (b, 1, 3)
+        dist = torch.sum((x - centroid) ** 2, dim=-1)  # Compute squared distances
+        distances = torch.min(distances, dist)  # Update minimum distances
+        farthest = torch.argmax(distances, dim=-1)  # Select next farthest point
 
     return idx
-
-
 
 # def ball_query_pytorch(src, query, radius, k):
 #     # src: (b, n, 3)
