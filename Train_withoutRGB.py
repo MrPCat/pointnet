@@ -8,15 +8,22 @@ from torch.optim.lr_scheduler import StepLR
 from pointnet_ import PointNet2ClsSSG
 
 class PointCloudDataset(Dataset):
-    def __init__(self, file_path, chunk_size=2048):
+    def __init__(self, file_path, chunk_size=1024):
         self.chunk_size = chunk_size
         data = np.loadtxt(file_path)
         if len(data.shape) == 1:
             data = data.reshape(1, -1)
+        
+        # Add shape verification
+        print(f"Loaded data shape: {data.shape}")
+        assert data.shape[1] >= 6, f"Data should have at least 6 columns, got {data.shape[1]}"
             
         xyz = data[:, :3].astype(np.float32)
         features = data[:, 3:6].astype(np.float32)
-        self.label = data[0, -1].astype(np.int64)  # Using first point's label as scene label
+        self.label = data[0, -1].astype(np.int64)
+        
+        # Verify shapes before chunking
+        print(f"XYZ shape: {xyz.shape}, Features shape: {features.shape}")
         
         # Calculate number of full chunks and remaining points
         n_points = len(xyz)
@@ -100,9 +107,15 @@ def train(model, dataloader, optimizer, criterion, device):
     total = 0
 
     for xyz, features, labels in dataloader:
-        # Transpose the data to match model's expected format
-        xyz = xyz.transpose(1, 2)  # from (b, n, 3) to (b, 3, n)
-        features = features.transpose(1, 2)  # from (b, n, c) to (b, c, n)
+        # Add dimension checks
+        print(f"XYZ shape before transpose: {xyz.shape}")
+        print(f"Features shape before transpose: {features.shape}")
+        
+        xyz = xyz.transpose(1, 2)
+        features = features.transpose(1, 2)
+        
+        print(f"XYZ shape after transpose: {xyz.shape}")
+        print(f"Features shape after transpose: {features.shape}")
         
         xyz, features, labels = xyz.to(device), features.to(device), labels.to(device)
         optimizer.zero_grad()
@@ -192,7 +205,7 @@ def main():
     model = PointNet2ClsSSG(
         in_dim=in_dim,
         out_dim=out_dim,
-        downsample_points=[1024, 256],
+        downsample_points=[512, 128],
     )
     model.to(device)
     
