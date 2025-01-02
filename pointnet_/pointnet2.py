@@ -80,7 +80,6 @@ def downsample_fps(xyz, n_sample):
     _xyz = rearrange(xyz, 'b d n -> b n d')
     sample_ind = farthest_point_sampling(_xyz, n_sample, start_idx=0)  # (b, k)
     sample_xyz = xyz.gather(-1, repeat(sample_ind, 'b k -> b d k', d=xyz.shape[1]))  # (b, 3, k)
-    
     return SampleResult(None, sample_xyz, sample_ind, None)
 
 
@@ -104,7 +103,7 @@ class SABlock(nn.Module):
         self.conv_blocks = nn.ModuleList()
         self.last_norms = nn.ModuleList()
         for i, (dims, radius, k) in enumerate(zip(self.dims_list, self.radius_list, self.k_list)):
-            dims = [in_dim] + dims  # Remove the +3 to avoid concatenation mismatch
+            dims = [in_dim + 3] + dims
             conv = nn.Sequential(*[
                 nn.Sequential(nn.Conv2d(in_d, out_d, 1, bias=False),
                               nn.BatchNorm2d(out_d),
@@ -176,207 +175,25 @@ class UpBlock(nn.Module):
         ori_x = self.conv(ori_x)
         return ori_x
 
-# First and unchanged function
-# class PointNet2ClsSSG(nn.Module):
-#     #originalOne
-#     def __init__(
-#             self,
-#             in_dim,
-#             out_dim,
-#             *,
-#             downsample_points=(512, 128),
-#             radii=(0.2, 0.4),
-#             ks=(32, 64),
-#             head_norm=True,
-#             dropout=0.5,
-#     ):
-#         super().__init__()
-#         self.downsample_points = downsample_points
-
-#         self.sa1 = SABlock(in_dim, [64, 64, 128], radii[0], ks[0])
-#         self.sa2 = SABlock(128, [128, 128, 256], radii[1], ks[1])
-#         self.global_sa = nn.Sequential(
-#             nn.Conv1d(256, 256, 1, bias=False),
-#             nn.BatchNorm1d(256),
-#             nn.GELU(),
-#             nn.Conv1d(256, 512, 1, bias=False),
-#             nn.BatchNorm1d(512),
-#             nn.GELU(),
-#             nn.Conv1d(512, 1024, 1, bias=False),
-#         )
-
-#         norm = nn.BatchNorm1d if head_norm else nn.Identity
-#         self.norm = norm(1024)
-#         self.act = nn.GELU()
-
-#         self.head = nn.Sequential(
-#             nn.Linear(1024, 512, bias=False),
-#             norm(512),
-#             nn.GELU(),
-#             nn.Dropout(dropout),
-#             nn.Linear(512, 256, bias=False),
-#             norm(256),
-#             nn.GELU(),
-#             nn.Dropout(dropout),
-#             nn.Linear(256, out_dim)
-#        )
-
-#     ####################
-#     def __init__(
-#         self,
-#         in_dim,
-#         out_dim,
-#         *,
-#         downsample_points=(1024, 256),
-#         radii=(0.3, 0.6),
-#         ks=(64, 128),
-#         head_norm=True,
-#         dropout=0.3,
-# ):
-#         super().__init__()
-#         self.downsample_points = downsample_points
-
-#         self.sa1 = SABlock(in_dim, [128, 128, 256], radii[0], ks[0])
-#         self.sa2 = SABlock(256, [256, 256, 512], radii[1], ks[1])
-#         self.global_sa = nn.Sequential(
-#             nn.Conv1d(256, 512, 1, bias=False),
-#             nn.BatchNorm1d(512),
-#             nn.GELU(),
-#             nn.Conv1d(512, 1024, 1, bias=False),
-#             nn.BatchNorm1d(1024),
-#             nn.GELU(),
-#             nn.Conv1d(1024, 2048, 1, bias=False),
-#         )
-
-#         norm = nn.BatchNorm1d if head_norm else nn.Identity
-#         self.norm = norm(2048)
-#         self.act = nn.GELU()
-
-#         self.head = nn.Sequential(
-#             nn.Linear(2048, 1024, bias=False),
-#             norm(1024),
-#             nn.GELU(),
-#             nn.Dropout(dropout),
-#             nn.Linear(1024, 512, bias=False),
-#             norm(512),
-#             nn.GELU(),
-#             nn.Dropout(dropout),
-#             nn.Linear(512, out_dim)
-#         )
-
-
-#     def forward(self, x, xyz):
-#         # x: (b, c, n)
-#         # xyz: (b, 3, n)
-#         xyz1 = downsample_fps(xyz, self.downsample_points[0]).xyz
-#         x1 = self.sa1(x, xyz, xyz1)
-
-#         xyz2 = downsample_fps(xyz1, self.downsample_points[1]).xyz
-#         x2 = self.sa2(x1, xyz1, xyz2)
-
-#         x3 = self.global_sa(x2)
-#         out = x3.max(-1)[0]
-#         out = self.act(self.norm(out))
-#         out = self.head(out)
-#         return out
 
 class PointNet2ClsSSG(nn.Module):
-    def __init__(
-            self,
-            in_dim, 
-            out_dim,
-            *,
-            downsample_points=(256, 128),
-            radii=(0.4, 0.8),
-            ks=(64, 128),
-            head_norm=True,
-            dropout=0.3,
-    ):
-        super().__init__()
-        self.in_dim = in_dim  # Store in_dim as an attribute
-        self.downsample_points = downsample_points
 
-        # First Set Abstraction Block
-        self.sa1 = SABlock(in_dim, [128, 128, 256], radii[0], ks[0])
-
-            # Second Set Abstraction Block
-        self.sa2 = SABlock(256, [256, 256, 512], radii[1], ks[1])
-
-            # Global Set Abstraction
-        self.global_sa = nn.Sequential(
-            nn.Conv1d(512, 512, 1, bias=False),
-                nn.BatchNorm1d(512),
-                nn.GELU(),
-                nn.Conv1d(512, 1024, 1, bias=False),
-                nn.BatchNorm1d(1024),
-                nn.GELU(),
-                nn.Conv1d(1024, 2048, 1, bias=False),
-            )
-
-        norm = nn.BatchNorm1d if head_norm else nn.Identity
-        self.norm = norm(2048)
-        self.act = nn.GELU()
-
-            # Classification Head
-        self.head = nn.Sequential(
-            nn.Linear(2048, 1024, bias=False),
-                norm(1024),
-                nn.GELU(),
-                nn.Dropout(dropout),
-                nn.Linear(1024, 512, bias=False),
-                norm(512),
-                nn.GELU(),
-                nn.Dropout(dropout),
-                nn.Linear(512, out_dim)
-            )
-
-    def forward(self, data):
-        """
-        Args:
-            data: A tensor of shape (B, N, C), where:
-                - B is the batch size
-                - N is the number of points in each point cloud
-                - C is the number of channels (features + coordinates) 
-        """
-        features = data[:, :, :self.in_dim]  # Extract features
-        xyz = data[:, :, self.in_dim:]     # Extract coordinates
-
-        print(f"Feature shape: {features.shape}, Coordinate shape: {xyz.shape}") 
-
-        xyz1 = downsample_fps(xyz, self.downsample_points[0]).xyz
-        x1 = self.sa1(features, xyz, xyz1)
-
-        xyz2 = downsample_fps(xyz1, self.downsample_points[1]).xyz
-        x2 = self.sa2(x1, xyz1, xyz2)
-
-        x3 = self.global_sa(x2)
-        out = x3.max(-1)[0]
-        return self.head(out)
-
-
-
-# FOR Finetuning the files there 
-
-class PointNet2ClsSSGv1(nn.Module):
     def __init__(
             self,
             in_dim,
             out_dim,
             *,
-            downsample_points,  # Dynamically set in train.py
-            radii,
-            ks,
-            head_norm,
-            dropout
+            downsample_points=(512, 128),
+            radii=(0.2, 0.4),
+            ks=(32, 64),
+            head_norm=True,
+            dropout=0.5,
     ):
         super().__init__()
         self.downsample_points = downsample_points
 
-        # Set abstraction blocks
         self.sa1 = SABlock(in_dim, [64, 64, 128], radii[0], ks[0])
         self.sa2 = SABlock(128, [128, 128, 256], radii[1], ks[1])
-
-        # Global feature aggregation
         self.global_sa = nn.Sequential(
             nn.Conv1d(256, 256, 1, bias=False),
             nn.BatchNorm1d(256),
@@ -387,7 +204,6 @@ class PointNet2ClsSSGv1(nn.Module):
             nn.Conv1d(512, 1024, 1, bias=False),
         )
 
-        # Classification head
         norm = nn.BatchNorm1d if head_norm else nn.Identity
         self.norm = norm(1024)
         self.act = nn.GELU()
@@ -407,10 +223,6 @@ class PointNet2ClsSSGv1(nn.Module):
     def forward(self, x, xyz):
         # x: (b, c, n)
         # xyz: (b, 3, n)
-        
-        print("Input xyz shape before transpose:", xyz.shape)
-        print("Input features shape before transpose:", x.shape)       
-        
         xyz1 = downsample_fps(xyz, self.downsample_points[0]).xyz
         x1 = self.sa1(x, xyz, xyz1)
 
@@ -422,6 +234,7 @@ class PointNet2ClsSSGv1(nn.Module):
         out = self.act(self.norm(out))
         out = self.head(out)
         return out
+
 
 class PointNet2ClsMSG(nn.Module):
 
