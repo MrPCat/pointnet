@@ -164,8 +164,8 @@ def evaluate(model, dataloader, criterion, device):
 def main():
     # Configuration
     data_dir = r"C:\\Farshid\\Uni\\Semesters\\Thesis\\Data\\Vaihingen\\Vaihingen\\Augmentation"
-    batch_size = 4
-    num_epochs = 20
+    batch_size = 16
+    num_epochs = 30
     learning_rate = 0.001
     step_size = 5
     gamma = 0.5
@@ -183,7 +183,7 @@ def main():
     print(f"Feature dimension: {feature_dim}")
     
     # Split datasets
-    train_datasets = datasets[:19]
+    train_datasets = datasets[0]
     val_dataset = datasets[19]
 
     train_loader = DataLoader(
