@@ -10,7 +10,7 @@ from torch.optim.lr_scheduler import StepLR
 import logging
 
 # === Configure Logging ===
-log_file_path = r"C:\Users\faars\Downloads\drive-download-20250102T121839Z-001\rainingDown_logs.txt"
+log_file_path = r"C:\Farshid\Uni\Semesters\Thesis\Data\Vaihingen\Vaihingen\3DLabeling\AugmentedFiles\trainingDown_logs.txt"
 logging.basicConfig(filename=log_file_path, level=logging.INFO, format='%(asctime)s - %(message)s')
 
 def log_and_print(message):
@@ -109,9 +109,9 @@ if __name__ == "__main__":
     log_and_print(f"Using device: {device}")
 
     # File paths
-    data_dir = r"C:\Farshid\Uni\Semesters\Thesis\Data\Vaihingen\Vaihingen\Augmentation"
-    train_files = [os.path.join(data_dir, f"Vaihingen3D_AugmentTraininig_{i}.pts") for i in range(18)]
-    val_file = os.path.join(data_dir, "Vaihingen3D_AugmentTraininig_19.pts")
+    data_dir = r"C:\Farshid\Uni\Semesters\Thesis\Data\Vaihingen\Vaihingen\3DLabeling\AugmentedFiles"
+    train_files = [os.path.join(data_dir, f"Augmented_{i}.pts") for i in range(1,20)]
+    val_file = os.path.join(data_dir, "Augmented_20.pts")
 
     val_dataset = PointCloudDataset(val_file, points_per_cloud=1024)
     val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False)
@@ -131,7 +131,7 @@ if __name__ == "__main__":
     scheduler = StepLR(optimizer, step_size=10, gamma=0.5)
     criterion = nn.CrossEntropyLoss()
 
-    save_dir = r"C:\Users\faars\Downloads\drive-download-20250102T121839Z-001"
+    save_dir = r"C:\Farshid\Uni\Semesters\Thesis\Data\Vaihingen\Vaihingen\3DLabeling\AugmentedFiles"
     os.makedirs(save_dir, exist_ok=True)
 
     # Training
