@@ -84,7 +84,7 @@ def create_model(in_dim, num_classes):
 
 
 # === Training Loop ===
-def train_model(model, train_loader, optimizer, criterion, epochs, device, save_dir):
+def train_model(model, train_loader, val_loader, optimizer, criterion, epochs, device, save_dir):
     model.to(device)
 
     for epoch in range(epochs):
@@ -102,7 +102,7 @@ def train_model(model, train_loader, optimizer, criterion, epochs, device, save_
             total_loss += loss.item()
 
         train_loss = total_loss / len(train_loader)
-        val_loss, val_accuracy = validate_model(model, criterion, device)
+        val_loss, val_accuracy = validate_model(model, val_loader, criterion, device)
 
         # Save model after each epoch
         epoch_model_path = os.path.join(save_dir, f"pointnetDown_epoch_{epoch+1}.pth")
@@ -141,17 +141,17 @@ if __name__ == "__main__":
     
     # Specify File Paths
     train_file = '/content/drive/MyDrive/H3D LiDar Data/Mar18_train_downsampled.txt'
-    #val_file = '//content/drive/MyDrive/H3D LiDar Data/Mar18_val_downsampled.txt'
+    val_file = '//content/drive/MyDrive/H3D LiDar Data/Mar18_val_downsampled.txt'
     test_file = '/content/drive/MyDrive/H3D LiDar Data/Mar18_test.txt'
 
     # Dataset and DataLoader
     batch_size = 16
     train_dataset = PointCloudDataset(train_file, points_per_cloud=1024)
-    #val_dataset = PointCloudDataset(val_file, points_per_cloud=1024)
+    val_dataset = PointCloudDataset(val_file, points_per_cloud=1024)
     test_dataset = PointCloudDataset(test_file, points_per_cloud=1024)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    #val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     # Model, Optimizer, and Loss Function
@@ -170,7 +170,7 @@ if __name__ == "__main__":
 
     # Training with Validation
     log_and_print("Starting training...")
-    train_model(model, train_loader, optimizer, criterion, epochs, device, save_dir)
+    train_model(model, train_loader, val_loader, optimizer, criterion, epochs, device, save_dir)
 
 
 
