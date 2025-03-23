@@ -72,7 +72,7 @@ def load_model(model_path, input_dim, output_dim):
 if __name__ == "__main__":
     # File paths
     test_file = '/content/drive/MyDrive/output_with_rgb1 (1).txt'
-    model_path = '/content/drive/MyDrive/pointnetDown_epoch_12.pth'
+    model_path = r"C:\Users\faars\Downloads\modelnet40ply2048-train-pointnet++.pth"
     output_file = '/content/drive/MyDrive/output_new1_predictions.txt'
     
     # Load the test dataset

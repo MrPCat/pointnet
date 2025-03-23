@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import torch
+import laspy
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
@@ -10,7 +11,7 @@ from torch.optim.lr_scheduler import StepLR
 import logging
 
 # === Configure Logging ===
-log_file_path = r"C:\Farshid\Uni\Semesters\Thesis\Data\Vaihingen\Vaihingen\3DLabeling\AugmentedFiles\trainingDown_logs.txt"
+log_file_path = r"C:\Farshid\Uni\Semesters\Thesis\Data\Vaihingen\Vaihingen\ALS\Lag_Vaihingen_Strip.txt"
 logging.basicConfig(filename=log_file_path, level=logging.INFO, format='%(asctime)s - %(message)s')
 
 def log_and_print(message):
@@ -20,12 +21,27 @@ def log_and_print(message):
 # === Dataset Class ===
 class PointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024):
-        self.data = np.loadtxt(file_path, delimiter=' ', skiprows=1)
-        self.xyz = self.data[:, :3]
-        self.features = self.data[:, 3:-1]
-        self.labels = self.data[:, -1]
+        # Open LAS file
+        las = laspy.read(file_path)  # Ensure this is a single file path
 
+        # Extract XYZ coordinates
+        self.xyz = np.vstack((las.x, las.y, las.z)).T  # Shape: (num_points, 3)
+
+        # Extract intensity and other features (if available)
+        try:
+            self.features = np.vstack((las.intensity,)).T  # Shape: (num_points, 1)
+        except:
+            self.features = np.zeros((len(self.xyz), 1))  # Dummy feature if missing
+
+        # Extract labels (if available)
+        try:
+            self.labels = las.classification
+        except:
+            self.labels = np.zeros(len(self.xyz))  # Dummy labels if missing
+
+        # Normalize XYZ coordinates
         self.xyz -= np.mean(self.xyz, axis=0)
+
         self.points_per_cloud = points_per_cloud
         self.num_clouds = len(self.xyz) // self.points_per_cloud
 
@@ -48,13 +64,14 @@ def create_model(in_dim, num_classes):
     return model
 
 # === Training Loop ===
-def train_model(model, train_file_paths, val_loader, optimizer, scheduler, criterion, epochs, device, save_dir):
+def train_model(model, train_file_paths, optimizer, scheduler, criterion, epochs, device, save_dir):
     model.to(device)
 
     for epoch in range(epochs):
         total_loss = 0
 
         for train_file in train_file_paths:
+            # Initialize the dataset and dataloader for each file
             train_dataset = PointCloudDataset(train_file, points_per_cloud=1024)
             train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
             model.train()
@@ -69,7 +86,8 @@ def train_model(model, train_file_paths, val_loader, optimizer, scheduler, crite
                 total_loss += loss.item()
 
         train_loss = total_loss / len(train_file_paths)
-        val_loss, val_accuracy = validate_model(model, val_loader, criterion, device)
+        # Optionally, include validation in this loop
+        # val_loss, val_accuracy = validate_model(model, val_loader, criterion, device)
 
         # Update learning rate
         scheduler.step()
@@ -78,8 +96,8 @@ def train_model(model, train_file_paths, val_loader, optimizer, scheduler, crite
         torch.save(model.state_dict(), epoch_model_path)
         log_and_print(f"Model checkpoint saved to {epoch_model_path}")
 
-        log_and_print(f"Epoch {epoch+1}/{epochs}, Train Loss: {train_loss:.4f}, "
-                      f"Validation Loss: {val_loss:.4f}, Validation Accuracy: {val_accuracy:.2f}%")
+        log_and_print(f"Epoch {epoch+1}/{epochs}, Train Loss: {train_loss:.4f}")
+
 
 # === Validate Model ===
 def validate_model(model, data_loader, criterion, device):
@@ -109,12 +127,18 @@ if __name__ == "__main__":
     log_and_print(f"Using device: {device}")
 
     # File paths
-    data_dir = r"C:\Farshid\Uni\Semesters\Thesis\Data\Vaihingen\Vaihingen\3DLabeling\AugmentedFiles"
-    train_files = [os.path.join(data_dir, f"Augmented_{i}.pts") for i in range(1,20)]
-    val_file = os.path.join(data_dir, "Augmented_20.pts")
+    train_files = [
+    r"C:\Farshid\Uni\Semesters\Thesis\Data\Vaihingen\Vaihingen\ALS\Vaihingen_Strip_03.LAS",
+    r"C:\Farshid\Uni\Semesters\Thesis\Data\Vaihingen\Vaihingen\ALS\Vaihingen_Strip_05.LAS",
+    r"C:\Farshid\Uni\Semesters\Thesis\Data\Vaihingen\Vaihingen\ALS\Vaihingen_Strip_07.LAS",
+    r"C:\Farshid\Uni\Semesters\Thesis\Data\Vaihingen\Vaihingen\ALS\Vaihingen_Strip_09.LAS",
+    r"C:\Farshid\Uni\Semesters\Thesis\Data\Vaihingen\Vaihingen\ALS\Vaihingen_Strip_10.LAS"
+    ]
+    #train_files = [os.path.join(data_dir, f"Augmented_{i}.pts") for i in range(1,20)]
+    #val_file = os.path.join(data_dir, "Augmented_20.pts")
 
-    val_dataset = PointCloudDataset(val_file, points_per_cloud=1024)
-    val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False)
+    #val_dataset = PointCloudDataset(val_file, points_per_cloud=1024)
+    #val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False)
 
     # Parameters
     batch_size = 16
@@ -122,7 +146,7 @@ if __name__ == "__main__":
     epochs = 50
 
     # Model, Optimizer, and Scheduler
-    train_dataset = PointCloudDataset(train_files[0], points_per_cloud=1024)
+    train_dataset = PointCloudDataset(train_files, points_per_cloud=1024)
     in_dim = train_dataset.features.shape[1]
     num_classes = len(np.unique(train_dataset.labels))
 
@@ -131,12 +155,12 @@ if __name__ == "__main__":
     scheduler = StepLR(optimizer, step_size=10, gamma=0.5)
     criterion = nn.CrossEntropyLoss()
 
-    save_dir = r"C:\Farshid\Uni\Semesters\Thesis\Data\Vaihingen\Vaihingen\3DLabeling\AugmentedFiles"
+    save_dir = r"C:\Farshid\Uni\Semesters\Thesis\Data\Vaihingen\Vaihingen\ALS"
     os.makedirs(save_dir, exist_ok=True)
 
     # Training
     log_and_print("Starting training...")
-    train_model(model, train_files, val_loader, optimizer, scheduler, criterion, epochs, device, save_dir)
+    train_model(model, train_files, optimizer, scheduler, criterion, epochs, device, save_dir)
 
     model_path = os.path.join(save_dir, "pointnetDown_model.pth")
     torch.save(model.state_dict(), model_path)
