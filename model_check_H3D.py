@@ -215,7 +215,7 @@ def predict(test_file, model_path, num_classes=11):
 if __name__ == "__main__":
     # Paths
     test_file = r"C:\Farshid\Uni\Semesters\Thesis\Data\Epoch_March2018\LiDAR\Mar18_test_GroundTruth.las"
-    model_path = r"C:\Users\faars\Downloads\modelnet40ply2048-train-pointnet++.pth"
+    model_path = r"C:\Users\faars\Downloads\modelnet40ply2048-train-pointnet++best.pth"
 
     # Evaluate model
     evaluate_model(test_file, model_path, num_classes=11)
