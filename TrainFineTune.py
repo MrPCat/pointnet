@@ -4,8 +4,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
-from pointnet_ import PointNetCls, STN
-from pointnet_ import PointNet2ClsSSGv1 
+from pointnet import PointNetCls, STN
+from pointnet import PointNet2ClsSSGv1 
 import logging
 
 # === Configure Logging ===

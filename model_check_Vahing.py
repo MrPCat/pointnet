@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader
-from pointnet_ import PointNet2ClsSSG
+from pointnet import PointNet2ClsSSG
 from sklearn.metrics import confusion_matrix, accuracy_score
 
 
@@ -293,7 +293,7 @@ def predict_with_model(test_file, model_path, num_classes=11):
 if __name__ == "__main__":
     # File paths
     test_file = r"C:\Farshid\Uni\Semesters\Thesis\Data\Vaihingen\Vaihingen\3DLabeling\Vaihingen3D_EVAL_WITH_REF.pts\Vaihingen3D_EVAL_WITH_REF.pts"
-    model_path = r"C:\Users\faars\Downloads\modelnet40ply2048-train-pointnet++.pth"
+    model_path = r"C:\Users\faars\Downloads\s3dis-train-pointnet++s3ids.pth"
     
     # Create dataset with labels from the 7th column (index 6)
     test_dataset = PointCloudDataset(test_file, points_per_cloud=1024, debug=True, label_column_index=6)

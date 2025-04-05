@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 from torch.optim.lr_scheduler import StepLR
-from pointnet_ import PointNet2ClsSSG
+from pointnet import PointNet2ClsSSG
 
 class PointCloudDataset(Dataset):
     def __init__(self, file_path, chunk_size=1024):
@@ -174,6 +174,10 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
+    print(f"Checking dataset directory: {data_dir}")
+    files = [f for f in os.listdir(data_dir) if f.endswith('.pts')]
+    print("Found files:", files)
+
     # Load datasets
     files = [os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.endswith('.pts')]
     datasets = [PointCloudDataset(f, chunk_size=chunk_size) for f in files]
@@ -182,9 +186,21 @@ def main():
     feature_dim = datasets[0].chunks_features[0].shape[1]
     print(f"Feature dimension: {feature_dim}")
     
-    # Split datasets
-    train_datasets = datasets[0]
-    val_dataset = datasets[19]
+    num_files = len(datasets)
+    print(f"Number of datasets loaded: {num_files}")
+
+    if num_files < 2:
+        raise ValueError("Not enough .pts files to split into training and validation sets.")
+
+    # Use 80% for training and 20% for validation
+    split_idx = int(0.8 * num_files)
+    train_datasets = datasets[:split_idx]
+    val_dataset = datasets[split_idx:]
+
+    print(f"Training on {len(train_datasets)} datasets, Validating on {len(val_dataset)} datasets.")
+
+    if len(train_datasets) == 0 or len(val_dataset) == 0:
+        raise ValueError("One of the datasets (train or validation) is empty. Check the dataset path!")
 
     train_loader = DataLoader(
         torch.utils.data.ConcatDataset(train_datasets), 

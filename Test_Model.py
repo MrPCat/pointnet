@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
-from pointnet_ import PointNet2ClsSSG  # Ensure this matches the model from training
+from pointnet import PointNet2ClsSSG  # Ensure this matches the model from training
 import pandas as pd
 
 class PointCloudDataset(Dataset):
