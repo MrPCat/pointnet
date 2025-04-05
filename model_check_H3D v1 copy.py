@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import laspy
 import torch.nn.functional as F
-from pointnet import PointNet2ClsSSG
+from pointnet_ import PointNet2ClsSSG
 
 # Label mapping for H3D dataset
 H3D_LABELS = {

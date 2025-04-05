@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import laspy
 from torch.utils.data import Dataset, DataLoader
-from pointnet import PointNet2ClsSSG
+from pointnet_ import PointNet2ClsSSG
 from sklearn.metrics import confusion_matrix, accuracy_score
 
 

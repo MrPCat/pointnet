@@ -1,7 +1,7 @@
 import unittest
 import torch
 import taichi as ti
-from pointnet import PointNet2ClsSSG, PointNet2ClsMSG, PointNet2SegMSG, PointNet2SegSSG, PointNet2PartSegSSG, \
+from pointnet_ import PointNet2ClsSSG, PointNet2ClsMSG, PointNet2SegMSG, PointNet2SegSSG, PointNet2PartSegSSG, \
     PointNet2PartSegMSG
 
 ti.init(ti.cuda)

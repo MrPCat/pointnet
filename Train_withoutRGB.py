@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 from torch.optim.lr_scheduler import StepLR
-from pointnet import PointNet2ClsSSG
+from pointnet_ import PointNet2ClsSSG
 
 class PointCloudDataset(Dataset):
     def __init__(self, file_path, chunk_size=1024):
