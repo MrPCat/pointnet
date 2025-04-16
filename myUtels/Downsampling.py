@@ -48,7 +48,7 @@ def analyze_binary_ply(file_path):
             if len(binary_data) < struct_size:
                 break
             values = struct.unpack(endian_char + struct_fmt, binary_data)
-            data.append(values)a
+            data.append(values)
 
         # Transpose and analyze
         data_cols = list(zip(*data))
