@@ -383,7 +383,10 @@ class PointNet2ClassifierCustom(nn.Module):
         out = self.act(self.norm(out))
         out = self.head(out)
         return out
+<<<<<<< HEAD
     
+=======
+>>>>>>> 562b8da52feef41f9f1ae91fef77fce3a861aa42
 class PointNet2ClsMSG(nn.Module):
 
     def __init__(
@@ -722,6 +725,7 @@ class PointNet2SegMSG(nn.Module):
 
         out = self.head(x)
         return out
+<<<<<<< HEAD
 
 class PointNet2SegMSG_new(nn.Module):
     def __init__(
@@ -796,3 +800,5 @@ class PointNet2SegMSG_new(nn.Module):
         # Head for final classification
         out = self.head(x)
         return out
+=======
+>>>>>>> 562b8da52feef41f9f1ae91fef77fce3a861aa42
