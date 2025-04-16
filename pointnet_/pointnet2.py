@@ -115,6 +115,18 @@ class SABlock(nn.Module):
             self.conv_blocks.append(conv)
             self.last_norms.append(nn.BatchNorm1d(dims[-1]))
 
+    def route(self, src_x, src_xyz, xyz, radius, k, neighbor_idx=None):
+        # src_x: (b, d, n)
+        # src_xyz: (b, 3, n)
+        # xyz: (b, 3, m)
+        if not exists(neighbor_idx):
+            neighbor_idx = _ball_query(src_xyz, xyz, radius, k)[0]  # (b, m, k)
+        neighbor_xyz = gather(src_xyz, neighbor_idx)  # (b, 3, m, k)
+        neighbor_xyz -= xyz[..., None]
+        x = gather(src_x, neighbor_idx)  # (b, d, m, k)
+        x = torch.cat([x, neighbor_xyz], dim=1)  # (b, d+3, m, k)
+        return SampleResult(x, xyz, None, neighbor_idx)
+
     def forward(self, src_x, src_xyz, xyz):
         # src_x: (b, d, n)
         # src_xyz: (b, 3, n)
@@ -130,7 +142,6 @@ class SABlock(nn.Module):
             xs.append(x)
 
         return torch.cat(xs, dim=1)
-
 # class SABlock(nn.Module):
 #     """
 #     Set abstraction block without downsampling.
@@ -314,7 +325,7 @@ class PointNet2ClsSSG(nn.Module):
         out = self.head(out)
         return out
 
-class PointNet2ClsMSG(nn.Module):
+class PointNet2ClassifierCustom(nn.Module):
     def __init__(
             self,
             in_dim,
