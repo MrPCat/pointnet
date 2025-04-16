@@ -235,7 +235,75 @@ class PointNet2ClsSSG(nn.Module):
         out = self.head(out)
         return out
 
+class PointNet2ClassifierCustom(nn.Module):
+    def __init__(
+            self,
+            in_dim,
+            out_dim,
+            *,
+            downsample_points=(8192, 4096, 2048, 1024),  # As specified
+            ball_radii=(0.5, 1.0, 5.0, 15.0),  # As specified
+            neighbor_counts=(16, 64, 64, 32),  # As specified
+            head_norm=True,
+            dropout=0.5,
+    ):
+        super().__init__()
+        self.downsample_points = downsample_points
 
+        # Four set abstraction layers as specified
+        self.sa1 = SABlock(in_dim, [128, 128, 256], ball_radii[0], neighbor_counts[0])
+        self.sa2 = SABlock(256, [128, 128, 256], ball_radii[1], neighbor_counts[1])
+        self.sa3 = SABlock(256, [128, 128, 256], ball_radii[2], neighbor_counts[2])
+        self.sa4 = SABlock(256, [128, 128, 256], ball_radii[3], neighbor_counts[3])
+
+        # Global feature extraction
+        self.global_sa = nn.Sequential(
+            nn.Conv1d(256, 512, 1, bias=False),
+            nn.BatchNorm1d(512),
+            nn.ReLU(),  # Using ReLU instead of GELU
+            nn.Conv1d(512, 1024, 1, bias=False),
+        )
+
+        norm = nn.BatchNorm1d if head_norm else nn.Identity
+        self.norm = norm(1024)
+        self.act = nn.ReLU()  # Using ReLU instead of GELU
+
+        # Classification head
+        self.head = nn.Sequential(
+            nn.Linear(1024, 512, bias=False),
+            norm(512),
+            nn.ReLU(),  # Using ReLU instead of GELU
+            nn.Dropout(dropout),
+            nn.Linear(512, 256, bias=False),
+            norm(256),
+            nn.ReLU(),  # Using ReLU instead of GELU
+            nn.Dropout(dropout),
+            nn.Linear(256, out_dim)
+        )
+
+    def forward(self, x, xyz):
+        # x: (b, c, n)
+        # xyz: (b, 3, n)
+        
+        # Set abstraction layers
+        xyz1 = downsample_fps(xyz, self.downsample_points[0]).xyz
+        x1 = self.sa1(x, xyz, xyz1)
+
+        xyz2 = downsample_fps(xyz1, self.downsample_points[1]).xyz
+        x2 = self.sa2(x1, xyz1, xyz2)
+
+        xyz3 = downsample_fps(xyz2, self.downsample_points[2]).xyz
+        x3 = self.sa3(x2, xyz2, xyz3)
+
+        xyz4 = downsample_fps(xyz3, self.downsample_points[3]).xyz
+        x4 = self.sa4(x3, xyz3, xyz4)
+
+        # Global feature
+        x5 = self.global_sa(x4)
+        out = x5.max(-1)[0]  # Global max pooling
+        out = self.act(self.norm(out))
+        out = self.head(out)
+        return out
 class PointNet2ClsMSG(nn.Module):
 
     def __init__(
