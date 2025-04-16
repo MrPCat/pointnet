@@ -1,3 +1,4 @@
+#this is the pointnet2 in pointnet_
 from collections import namedtuple
 from typing import Union, Iterable
 
@@ -85,7 +86,7 @@ def downsample_fps(xyz, n_sample):
 
 class SABlock(nn.Module):
     """
-    Set abstraction block without downsampling.
+    Set abstraction block with ReLU activation.
     """
 
     def __init__(
@@ -107,24 +108,12 @@ class SABlock(nn.Module):
             conv = nn.Sequential(*[
                 nn.Sequential(nn.Conv2d(in_d, out_d, 1, bias=False),
                               nn.BatchNorm2d(out_d),
-                              nn.GELU())
+                              nn.ReLU())  # Changed from GELU to ReLU
                 for in_d, out_d in zip(dims[:-2], dims[1:-1])
             ])
             conv.append(nn.Conv2d(dims[-2], dims[-1], 1, bias=False))
             self.conv_blocks.append(conv)
             self.last_norms.append(nn.BatchNorm1d(dims[-1]))
-
-    def route(self, src_x, src_xyz, xyz, radius, k, neighbor_idx=None):
-        # src_x: (b, d, n)
-        # src_xyz: (b, 3, n)
-        # xyz: (b, 3, m)
-        if not exists(neighbor_idx):
-            neighbor_idx = _ball_query(src_xyz, xyz, radius, k)[0]  # (b, m, k)
-        neighbor_xyz = gather(src_xyz, neighbor_idx)  # (b, 3, m, k)
-        neighbor_xyz -= xyz[..., None]
-        x = gather(src_x, neighbor_idx)  # (b, d, m, k)
-        x = torch.cat([x, neighbor_xyz], dim=1)  # (b, d+3, m, k)
-        return SampleResult(x, xyz, None, neighbor_idx)
 
     def forward(self, src_x, src_xyz, xyz):
         # src_x: (b, d, n)
@@ -136,12 +125,70 @@ class SABlock(nn.Module):
                 zip(self.conv_blocks, self.last_norms, self.radius_list, self.k_list)):
             out = self.route(src_x, src_xyz, xyz, radius, k)
             x = conv_block(out.x)
-            x = x.max(-1)[0]
-            x = F.gelu(norm(x))
+            x = x.max(-1)[0]  # Explicitly use max pooling
+            x = F.relu(norm(x))  # Changed from GELU to ReLU
             xs.append(x)
 
         return torch.cat(xs, dim=1)
 
+# class SABlock(nn.Module):
+#     """
+#     Set abstraction block without downsampling.
+#     """
+
+#     def __init__(
+#             self,
+#             in_dim,
+#             dims: Union[Iterable[int], Iterable[Iterable[int]]] = (64, 64, 128),
+#             radius: Union[float, Iterable[float]] = 0.2,
+#             k: Union[int, Iterable[int]] = 32
+#     ):
+#         super().__init__()
+#         self.dims_list = dims if isinstance(dims[0], Iterable) else [dims]
+#         self.radius_list = radius if isinstance(radius, Iterable) else [radius]
+#         self.k_list = k if isinstance(k, Iterable) else [k]
+
+#         self.conv_blocks = nn.ModuleList()
+#         self.last_norms = nn.ModuleList()
+#         for i, (dims, radius, k) in enumerate(zip(self.dims_list, self.radius_list, self.k_list)):
+#             dims = [in_dim + 3] + dims
+#             conv = nn.Sequential(*[
+#                 nn.Sequential(nn.Conv2d(in_d, out_d, 1, bias=False),
+#                               nn.BatchNorm2d(out_d),
+#                               nn.GELU())
+#                 for in_d, out_d in zip(dims[:-2], dims[1:-1])
+#             ])
+#             conv.append(nn.Conv2d(dims[-2], dims[-1], 1, bias=False))
+#             self.conv_blocks.append(conv)
+#             self.last_norms.append(nn.BatchNorm1d(dims[-1]))
+
+#     def route(self, src_x, src_xyz, xyz, radius, k, neighbor_idx=None):
+#         # src_x: (b, d, n)
+#         # src_xyz: (b, 3, n)
+#         # xyz: (b, 3, m)
+#         if not exists(neighbor_idx):
+#             neighbor_idx = _ball_query(src_xyz, xyz, radius, k)[0]  # (b, m, k)
+#         neighbor_xyz = gather(src_xyz, neighbor_idx)  # (b, 3, m, k)
+#         neighbor_xyz -= xyz[..., None]
+#         x = gather(src_x, neighbor_idx)  # (b, d, m, k)
+#         x = torch.cat([x, neighbor_xyz], dim=1)  # (b, d+3, m, k)
+#         return SampleResult(x, xyz, None, neighbor_idx)
+
+#     def forward(self, src_x, src_xyz, xyz):
+#         # src_x: (b, d, n)
+#         # src_xyz: (b, 3, n)
+#         # xyz: (b, 3, m)
+#         # out: (b, d', m)
+#         xs = []
+#         for i, (conv_block, norm, radius, k) in enumerate(
+#                 zip(self.conv_blocks, self.last_norms, self.radius_list, self.k_list)):
+#             out = self.route(src_x, src_xyz, xyz, radius, k)
+#             x = conv_block(out.x)
+#             x = x.max(-1)[0]
+#             x = F.gelu(norm(x))
+#             xs.append(x)
+
+#         return torch.cat(xs, dim=1)
 
 class UpBlock(nn.Module):
 
@@ -152,7 +199,7 @@ class UpBlock(nn.Module):
         self.conv = nn.Sequential(*[
             nn.Sequential(nn.Conv1d(in_d, out_d, 1, bias=False),
                           nn.BatchNorm1d(out_d),
-                          nn.GELU())
+                          nn.ReLU())  # Changed from GELU to ReLU
             for in_d, out_d in zip([in_dim, *dims[:-1]], dims)
         ])
 
@@ -174,6 +221,38 @@ class UpBlock(nn.Module):
         ori_x = self.route(sub_x, sub_xyz, ori_x, ori_xyz)
         ori_x = self.conv(ori_x)
         return ori_x
+
+# class UpBlock(nn.Module):
+
+#     def __init__(self, in_dim, dims: Iterable[int] = (256, 256), k=3, eps=1e-5):
+#         super().__init__()
+#         self.k = k
+#         self.eps = eps
+#         self.conv = nn.Sequential(*[
+#             nn.Sequential(nn.Conv1d(in_d, out_d, 1, bias=False),
+#                           nn.BatchNorm1d(out_d),
+#                           nn.GELU())
+#             for in_d, out_d in zip([in_dim, *dims[:-1]], dims)
+#         ])
+
+#     def route(self, src_x, src_xyz, dst_x, dst_xyz, neighbor_idx=None, dists=None):
+#         # use knn and weighted average to get the features
+#         if not exists(neighbor_idx):
+#             neighbor_idx, dists = knn(src_xyz, dst_xyz, self.k)  # (b, m, k)
+
+#         weights = 1. / (dists + self.eps)  # (b, m, k)
+#         weights = weights / weights.sum(dim=-1, keepdim=True)  # (b, m, k)
+
+#         neighbor_x = gather(src_x, neighbor_idx)  # (b, d, m, k)
+#         neighbor_x = (weights[:, None] * neighbor_x).sum(dim=-1)  # (b, d, m)
+
+#         dst_x = torch.cat([dst_x, neighbor_x], dim=1)  # (b, d+d', m)
+#         return dst_x
+
+#     def forward(self, ori_x, ori_xyz, sub_x, sub_xyz):
+#         ori_x = self.route(sub_x, sub_xyz, ori_x, ori_xyz)
+#         ori_x = self.conv(ori_x)
+#         return ori_x
 
 
 class PointNet2ClsSSG(nn.Module):
@@ -572,5 +651,79 @@ class PointNet2SegMSG(nn.Module):
             x = up_block(ori_x, ori_xyz, x, xyz)
             xyz = ori_xyz
 
+        out = self.head(x)
+        return out
+
+class PointNet2SegMSG_new(nn.Module):
+    def __init__(
+            self,
+            in_dim,
+            out_dim=9,  # 9 output classes as specified
+            *,
+            downsample_points=(8192, 4096, 2048, 1024),  # As specified in recommendations
+            base_radii=(0.5, 1.0, 5.0, 15.0),  # Ball query radii in meters
+            neighbor_counts=(16, 64, 64, 32),  # Number of neighboring points
+            dropout=0.5
+    ):
+        super().__init__()
+        self.downsample_points = downsample_points
+        
+        # Four set abstraction layers with multi-resolution grouping
+        self.sa_blocks = nn.ModuleList([
+            SABlock(in_dim, [[128, 128, 256]], [base_radii[0]], [neighbor_counts[0]]),
+            SABlock(256, [[128, 128, 256]], [base_radii[1]], [neighbor_counts[1]]),
+            SABlock(256, [[128, 128, 256]], [base_radii[2]], [neighbor_counts[2]]),
+            SABlock(256, [[128, 128, 256]], [base_radii[3]], [neighbor_counts[3]])
+        ])
+        
+        # Four feature propagation layers
+        self.up_blocks = nn.ModuleList([
+            UpBlock(256 + 256, [256, 256], k=3),
+            UpBlock(256 + 256, [256, 256], k=3),
+            UpBlock(256 + 256, [256, 256], k=3),
+            UpBlock(256 + in_dim, [128, 64], k=3)
+        ])
+        
+        # Network head
+        self.head = nn.Sequential(
+            nn.Conv1d(64, 128, 1, bias=False),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),  # ReLU instead of GELU as specified
+            nn.Dropout(dropout),
+            nn.Conv1d(128, out_dim, 1),
+        )
+        
+        # Replace all GELU activations with ReLU throughout the model
+        self._replace_activations(self)
+
+    def _replace_activations(self, module):
+        """Replace all GELU activations with ReLU in the model."""
+        for name, child in module.named_children():
+            if isinstance(child, nn.GELU):
+                setattr(module, name, nn.ReLU())
+            else:
+                self._replace_activations(child)
+
+    def forward(self, x, xyz):
+        # x: (b, c, n)
+        # xyz: (b, 3, n)
+        xs = [x]
+        xyzs = [xyz]
+        
+        # Set abstraction (encoding) phase
+        for i, sa_block in enumerate(self.sa_blocks):
+            xyz = downsample_fps(xyzs[-1], self.downsample_points[i]).xyz
+            x = sa_block(xs[-1], xyzs[-1], xyz)
+            xs.append(x)
+            xyzs.append(xyz)
+        
+        # Feature propagation (decoding) phase
+        x, xyz = xs.pop(), xyzs.pop()
+        for up_block in self.up_blocks:
+            ori_x, ori_xyz = xs.pop(), xyzs.pop()
+            x = up_block(ori_x, ori_xyz, x, xyz)
+            xyz = ori_xyz
+        
+        # Head for final classification
         out = self.head(x)
         return out
