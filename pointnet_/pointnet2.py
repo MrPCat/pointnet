@@ -142,6 +142,7 @@ class SABlock(nn.Module):
             xs.append(x)
 
         return torch.cat(xs, dim=1)
+
 # class SABlock(nn.Module):
 #     """
 #     Set abstraction block without downsampling.
