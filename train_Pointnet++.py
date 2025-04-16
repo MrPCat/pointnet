@@ -23,38 +23,43 @@ class PtsPointCloudDataset(Dataset):
     def __init__(self, file_path, points_per_cloud=1024):
         log_and_print(f"Loading PTS file: {file_path}")
         
-        # Read PTS file (assuming space-separated values with X Y Z intensity classification)
         try:
             data = np.loadtxt(file_path, delimiter=' ')
-            if data.shape[1] >= 3:  # At minimum, we need XYZ coordinates
-                self.xyz = data[:, 0:3]  # First 3 columns are XYZ
-                
-                # Extract intensity if available (4th column)
-                if data.shape[1] >= 4:
-                    self.features = data[:, 3:4]  # 4th column is intensity
-                else:
-                    self.features = np.zeros((len(self.xyz), 1))
-                
-                # Extract classification if available (5th column)
-                if data.shape[1] >= 5:
-                    self.labels = data[:, 4].astype(np.int64)
-                else:
-                    self.labels = np.zeros(len(self.xyz)).astype(np.int64)
-                
+            
+            if data.shape[1] >= 7:
+                # Extract XYZ, Intensity, return_number, number_of_returns, and label
+                self.xyz = data[:, 0:3]  # X, Y, Z
+                self.intensity = data[:, 3:4]  # Intensity
+                self.return_number = data[:, 4:5]  # Return Number
+                self.number_of_returns = data[:, 5:6]  # Number of Returns
+                self.labels = data[:, 6].astype(np.int64)  # Label
+
                 # Normalize XYZ coordinates
                 self.xyz -= np.mean(self.xyz, axis=0)
+
+                # Combine features into a single tensor (excluding XYZ)
+                self.features = np.concatenate((self.intensity, self.return_number, self.number_of_returns), axis=1)  # Shape: (N, num_features)
                 
+                # Calculate the number of features (excluding XYZ)
+                self.num_features = self.features.shape[1]
+
                 self.points_per_cloud = points_per_cloud
                 self.num_clouds = max(1, len(self.xyz) // self.points_per_cloud)
-                log_and_print(f"Loaded {len(self.xyz)} points, creating {self.num_clouds} clouds")
+
+                log_and_print(f"Loaded {len(self.xyz)} points, creating {self.num_clouds} clouds with {self.num_features} features per point")
             else:
-                raise ValueError("PTS file must have at least 3 columns for XYZ coordinates")
+                raise ValueError("PTS file must have at least 7 columns (X Y Z Intensity return_number number_of_returns label)")
+        
         except Exception as e:
             log_and_print(f"Error loading PTS file: {e}")
-            # Create empty dataset to avoid crashing
+            # Fallback to empty data
             self.xyz = np.zeros((points_per_cloud, 3))
-            self.features = np.zeros((points_per_cloud, 1))
+            self.intensity = np.zeros((points_per_cloud, 1))
+            self.return_number = np.zeros((points_per_cloud, 1))
+            self.number_of_returns = np.zeros((points_per_cloud, 1))
             self.labels = np.zeros(points_per_cloud).astype(np.int64)
+            self.features = np.zeros((points_per_cloud, 3))
+            self.num_features = 3  # Default to 3 for XYZ
             self.points_per_cloud = points_per_cloud
             self.num_clouds = 1
 
@@ -73,16 +78,23 @@ class PtsPointCloudDataset(Dataset):
         if end > len(self.xyz):
             indices = np.random.choice(len(self.xyz), self.points_per_cloud, replace=True)
             xyz = self.xyz[indices]
-            features = self.features[indices]
+            intensity = self.intensity[indices]
+            return_number = self.return_number[indices]
+            number_of_returns = self.number_of_returns[indices]
             point_labels = self.labels[indices]
         else:
             xyz = self.xyz[start:end]
-            features = self.features[start:end]
+            intensity = self.intensity[start:end]
+            return_number = self.return_number[start:end]
+            number_of_returns = self.number_of_returns[start:end]
             point_labels = self.labels[start:end]
+        
+        # Combine features into a single tensor
+        features = np.concatenate((intensity, return_number, number_of_returns), axis=1)  # Shape: (N, num_features)
         
         # Convert to tensors
         xyz_tensor = torch.tensor(xyz, dtype=torch.float32).T  # Shape: (3, points_per_cloud)
-        features_tensor = torch.tensor(features, dtype=torch.float32).T  # Shape: (1, points_per_cloud)
+        features_tensor = torch.tensor(features, dtype=torch.float32).T  # Shape: (num_features, points_per_cloud)
         
         # Get the most common label as the cloud label
         label = torch.tensor(np.bincount(point_labels).argmax(), dtype=torch.long)
@@ -116,15 +128,19 @@ class LasPointCloudDataset(Dataset):
             # Normalize XYZ coordinates
             self.xyz -= np.mean(self.xyz, axis=0)
 
+            # Dynamically calculate number of features
+            self.num_features = self.features.shape[1]  # This gives you the number of features excluding XYZ
+
             self.points_per_cloud = points_per_cloud
             self.num_clouds = max(1, len(self.xyz) // self.points_per_cloud)
-            log_and_print(f"Loaded {len(self.xyz)} points, creating {self.num_clouds} clouds")
+            log_and_print(f"Loaded {len(self.xyz)} points, creating {self.num_clouds} clouds with {self.num_features} features per point")
         except Exception as e:
             log_and_print(f"Error loading LAS file: {e}")
             # Create empty dataset to avoid crashing
             self.xyz = np.zeros((points_per_cloud, 3))
             self.features = np.zeros((points_per_cloud, 1))
             self.labels = np.zeros(points_per_cloud).astype(np.int64)
+            self.num_features = 1  # Default to 1 feature
             self.points_per_cloud = points_per_cloud
             self.num_clouds = 1
 
@@ -152,7 +168,7 @@ class LasPointCloudDataset(Dataset):
         
         # Convert to tensors
         xyz_tensor = torch.tensor(xyz, dtype=torch.float32).T  # Shape: (3, points_per_cloud)
-        features_tensor = torch.tensor(features, dtype=torch.float32).T  # Shape: (1, points_per_cloud)
+        features_tensor = torch.tensor(features, dtype=torch.float32).T  # Shape: (num_features, points_per_cloud)
         
         # Get the most common label as the cloud label
         label = torch.tensor(np.bincount(point_labels).argmax(), dtype=torch.long)
@@ -177,11 +193,14 @@ def create_model(in_dim, num_classes):
     return model
 
 # === Training Loop ===
+# === Training Loop ===
 def train_model(model, train_loaders, optimizer, scheduler, criterion, epochs, device, save_dir, val_loader=None):
     model.to(device)
 
     for epoch in range(epochs):
         total_loss = 0
+        correct_train = 0
+        total_train = 0
         total_batches = 0
 
         model.train()
@@ -193,11 +212,18 @@ def train_model(model, train_loaders, optimizer, scheduler, criterion, epochs, d
                 loss = criterion(logits, labels)
                 loss.backward()
                 optimizer.step()
+
+                # Track training loss and accuracy
                 total_loss += loss.item()
+                predicted = torch.argmax(logits, dim=1)
+                correct_train += (predicted == labels).sum().item()
+                total_train += labels.size(0)
                 total_batches += 1
 
+        # Calculate training loss and accuracy
         train_loss = total_loss / max(1, total_batches)
-        
+        train_accuracy = 100 * correct_train / total_train
+
         # Validation step
         val_metrics = ""
         if val_loader:
@@ -212,7 +238,11 @@ def train_model(model, train_loaders, optimizer, scheduler, criterion, epochs, d
         torch.save(model.state_dict(), epoch_model_path)
         log_and_print(f"Model checkpoint saved to {epoch_model_path}")
 
-        log_and_print(f"Epoch {epoch+1}/{epochs}, Train Loss: {train_loss:.4f}{val_metrics}")
+        # Print and log epoch results
+        log_and_print(f"Epoch {epoch+1}/{epochs}, Train Loss: {train_loss:.4f}, Train Accuracy: {train_accuracy:.2f}%{val_metrics}")
+
+        # Also log metrics to the log file
+        log_and_print(f"Epoch {epoch+1}/{epochs} -> Train Loss: {train_loss:.4f}, Train Accuracy: {train_accuracy:.2f}%{val_metrics}")
 
 # === Validate Model ===
 def validate_model(model, data_loader, criterion, device):
@@ -234,7 +264,11 @@ def validate_model(model, data_loader, criterion, device):
 
     avg_loss = total_loss / max(1, len(data_loader))
     accuracy = 100 * correct / max(1, total)
+
+    # Log validation metrics
+    log_and_print(f"Validation Loss: {avg_loss:.4f}, Validation Accuracy: {accuracy:.2f}%")
     return avg_loss, accuracy
+
 
 # __main__
 if __name__ == "__main__":
@@ -274,24 +308,24 @@ if __name__ == "__main__":
     train_loaders = []
     all_features = []
     all_labels = []
-    
+
     for train_file in existing_train_files:
         train_dataset = create_dataset(train_file, points_per_cloud=1024)
         train_loaders.append(DataLoader(train_dataset, batch_size=batch_size, shuffle=True))
-        
+
         # Collect feature dimensions and unique labels
         if hasattr(train_dataset, 'features'):
-            all_features.append(train_dataset.features.shape[1])
+            all_features.append(train_dataset.features.shape[1])  # Collect feature dimensions (num of features per point)
         if hasattr(train_dataset, 'labels'):
-            all_labels.extend(np.unique(train_dataset.labels))
-    
-    # Determine input dimension and number of classes from data
-    in_dim = max(all_features) if all_features else 1
-    num_classes = len(np.unique(all_labels)) if all_labels else 2
-    
+            all_labels.extend(train_dataset.labels)  # Collect all labels
+
+    # Dynamically determine input dimension (in_dim) and number of classes (num_classes)
+    in_dim = max(all_features) if all_features else 0  # Determine max feature dimension across datasets
+    num_classes = len(np.unique(all_labels)) if all_labels else 0  # Number of unique labels across datasets
+
     log_and_print(f"Input dimension: {in_dim}, Number of classes: {num_classes}")
 
-    # Model, Optimizer, and Scheduler
+    # Model, Optimizer, and Scheduler setup
     model = PointNet2ClsSSG(in_dim=in_dim, out_dim=num_classes, downsample_points=(512, 128))
     optimizer = optim.Adam(model.parameters(), lr=lr)
     scheduler = StepLR(optimizer, step_size=10, gamma=0.5)
@@ -300,10 +334,14 @@ if __name__ == "__main__":
     save_dir = r"C:\Farshid\Uni\Semesters\Thesis\Data\Vaihingen\Vaihingen\ALS"
     os.makedirs(save_dir, exist_ok=True)
 
-    # Training
+    # Training the model
     log_and_print("Starting training...")
     train_model(model, train_loaders, optimizer, scheduler, criterion, epochs, device, save_dir, val_loader)
 
+    # Save final model
     model_path = os.path.join(save_dir, "pointnetDown_final_model.pth")
     torch.save(model.state_dict(), model_path)
     log_and_print(f"Final model saved to {model_path}")
+
+    
+
