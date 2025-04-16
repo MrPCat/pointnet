@@ -382,11 +382,7 @@ class PointNet2ClassifierCustom(nn.Module):
         out = x5.max(-1)[0]  # Global max pooling
         out = self.act(self.norm(out))
         out = self.head(out)
-        return out
-<<<<<<< HEAD
-    
-=======
->>>>>>> 562b8da52feef41f9f1ae91fef77fce3a861aa42
+        return out    
 class PointNet2ClsMSG(nn.Module):
 
     def __init__(
@@ -725,8 +721,6 @@ class PointNet2SegMSG(nn.Module):
 
         out = self.head(x)
         return out
-<<<<<<< HEAD
-
 class PointNet2SegMSG_new(nn.Module):
     def __init__(
             self,
@@ -791,7 +785,7 @@ class PointNet2SegMSG_new(nn.Module):
             xyzs.append(xyz)
         
         # Feature propagation (decoding) phase
-        x, xyz = xs.pop(), xyzs.pop()
+        x, xyz = xs.pop(), xyzs.ypop()
         for up_block in self.up_blocks:
             ori_x, ori_xyz = xs.pop(), xyzs.pop()
             x = up_block(ori_x, ori_xyz, x, xyz)
@@ -800,5 +794,3 @@ class PointNet2SegMSG_new(nn.Module):
         # Head for final classification
         out = self.head(x)
         return out
-=======
->>>>>>> 562b8da52feef41f9f1ae91fef77fce3a861aa42
