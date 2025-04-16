@@ -56,5 +56,5 @@ def analyze_binary_ply(file_path):
             unique_vals = set(col)
             print(f"{name}: {len(unique_vals)} unique values → {list(unique_vals)[:10]}{'...' if len(unique_vals) > 10 else ''}")
 
-# Example usage:
+# Example usagess:
 analyze_binary_ply(r"C:\Farshid\Uni\Semesters\Thesis\Data\DALESObjects\DALESObjects\train\5190_54400_new.ply")
