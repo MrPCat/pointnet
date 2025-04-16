@@ -314,7 +314,7 @@ class PointNet2ClsSSG(nn.Module):
         out = self.head(out)
         return out
 
-class PointNet2ClassifierCustom(nn.Module):
+class PointNet2ClsMSG(nn.Module):
     def __init__(
             self,
             in_dim,
