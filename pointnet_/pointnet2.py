@@ -107,12 +107,25 @@ class SABlock(nn.Module):
             conv = nn.Sequential(*[
                 nn.Sequential(nn.Conv2d(in_d, out_d, 1, bias=False),
                               nn.BatchNorm2d(out_d),
-                              nn.ReLU())  # Changed from GELU to ReLU
+                              nn.ReLU())  # ReLU activation
                 for in_d, out_d in zip(dims[:-2], dims[1:-1])
             ])
             conv.append(nn.Conv2d(dims[-2], dims[-1], 1, bias=False))
             self.conv_blocks.append(conv)
             self.last_norms.append(nn.BatchNorm1d(dims[-1]))
+
+    def route(self, src_x, src_xyz, xyz, radius, k, neighbor_idx=None):
+        # src_x: (b, d, n)
+        # src_xyz: (b, 3, n)
+        # xyz: (b, 3, m)
+        if not exists(neighbor_idx):
+            neighbor_idx = _ball_query(src_xyz, xyz, radius, k)[0]  # (b, m, k)
+        neighbor_xyz = gather(src_xyz, neighbor_idx)  # (b, 3, m, k)
+        neighbor_xyz -= xyz[..., None]
+        x = gather(src_x, neighbor_idx)  # (b, d, m, k)
+        x = torch.cat([x, neighbor_xyz], dim=1)  # (b, d+3, m, k)
+        return SampleResult(x, xyz, None, neighbor_idx)
+
     def forward(self, src_x, src_xyz, xyz):
         # src_x: (b, d, n)
         # src_xyz: (b, 3, n)
@@ -124,7 +137,7 @@ class SABlock(nn.Module):
             out = self.route(src_x, src_xyz, xyz, radius, k)
             x = conv_block(out.x)
             x = x.max(-1)[0]  # Explicitly use max pooling
-            x = F.relu(norm(x))  # Changed from GELU to ReLU
+            x = F.relu(norm(x))  # ReLU activation
             xs.append(x)
 
         return torch.cat(xs, dim=1)
