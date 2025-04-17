@@ -1,3 +1,4 @@
+#this is the init
 from .pointnet import STN, PointNetCls, PointNetSeg
 from .pointnet2 import (
     PointNet2ClsSSG,
