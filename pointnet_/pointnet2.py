@@ -398,8 +398,8 @@ class PointNet2ClsMSG(nn.Module):
             in_dim,
             out_dim,
             *,
-            downsample_points=(512, 128),
-            base_radius=0.1,
+            downsample_points=(256, 128),
+            base_radius=0.5,
             base_k=16,
             head_norm=True,
             dropout=0.5,
@@ -451,7 +451,7 @@ class PointNet2ClsMSG(nn.Module):
         out = x3.max(-1)[0]
         out = self.act(self.norm(out))
         out = self.head(out)
-        return out'
+        return out
 
 
 class PointNet2PartSegSSG(nn.Module):

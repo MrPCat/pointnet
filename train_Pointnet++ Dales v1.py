@@ -14,7 +14,6 @@ import pickle
 from tqdm import tqdm
 from pointnet_ import PointNet2ClsMSG
 
-
 # === Configure Logging ===
 def setup_logger(log_dir):
     Path(log_dir).mkdir(parents=True, exist_ok=True)
@@ -313,7 +312,7 @@ def create_dataloaders(train_dataset, val_dataset, batch_size=16, num_workers=6)
 
 # === Early stopping class ===
 class EarlyStopping:
-    def __init__(self, patience=10, delta=0.001):
+    def __init__(self, patience=30, delta=0.001):
         self.patience = patience
         self.delta = delta
         self.counter = 0
@@ -337,93 +336,68 @@ class EarlyStopping:
         return self.early_stop
 
 
-# === Improved validation function with error handling ===
+
+
+def log_info(logger, message):
+    # Placeholder for logging - replace with your actual logger
+    print(message)
+
 def validate_model(model, data_loader, criterion, device, logger):
     model.eval()
-    total_loss = 0
-    correct = 0
-    total = 0
-
-    # Track per-class metrics for better evaluation
-    class_correct = {}
-    class_total = {}
+    total_loss = 0.0
+    all_predictions = []
+    all_labels = []
 
     val_bar = tqdm(data_loader, desc="Validating")
 
     with torch.no_grad():
         for batch_idx, batch_data in enumerate(val_bar):
             try:
-                # Check if batch data is complete
-                if len(batch_data) != 3:
-                    log_info(logger, f"Skipping incomplete validation batch {batch_idx}: expected 3 items, got {len(batch_data)}")
-                    continue
-
                 features, xyz, labels = batch_data
-
-                # Check for NaN or inf values
-                if torch.isnan(features).any() or torch.isinf(features).any() or \
-                torch.isnan(xyz).any() or torch.isinf(xyz).any():
-                    log_info(logger, f"Skipping validation batch {batch_idx} with NaN or inf values")
-                    continue
-
                 features, xyz, labels = features.to(device), xyz.to(device), labels.to(device)
 
-                # Forward pass
-                with autocast():
-                    logits = model(features, xyz)
-                    loss = criterion(logits, labels)
+                # Forward pass without autocast for validation
+                logits = model(features, xyz)
+                loss = criterion(logits, labels)
 
-                # Calculate metrics if loss is valid
-                if not torch.isnan(loss) and not torch.isinf(loss):
-                    total_loss += loss.item()
-                    predicted = torch.argmax(logits, dim=1)
-                    batch_correct = (predicted == labels).sum().item()
-                    correct += batch_correct
-                    total += labels.size(0)
+                # Store predictions and labels for later analysis
+                predictions = torch.argmax(logits, dim=1)
+                all_predictions.extend(predictions.cpu().numpy())
+                all_labels.extend(labels.cpu().numpy())
 
-                    # Update per-class metrics
-                    for cls in torch.unique(labels):
-                        cls_idx = cls.item()
-                        if cls_idx not in class_correct:
-                            class_correct[cls_idx] = 0
-                            class_total[cls_idx] = 0
+                # Update running loss
+                total_loss += loss.item()
 
-                        mask = (labels == cls_idx)
-                        class_correct[cls_idx] += (predicted[mask] == labels[mask]).sum().item()
-                        class_total[cls_idx] += mask.sum().item()
-
-                    # Update progress bar
-                    val_bar.set_postfix({
-                        'loss': f"{loss.item():.4f}",
-                        'acc': f"{100 * batch_correct / max(1, labels.size(0)):.1f}%"
-                    })
-                else:
-                    log_info(logger, f"Skipping validation batch {batch_idx} due to NaN or inf loss")
+                # Update progress bar
+                batch_acc = (predictions == labels).float().mean().item() * 100
+                val_bar.set_postfix({
+                    'loss': f"{loss.item():.4f}",
+                    'batch_acc': f"{batch_acc:.1f}%"
+                })
 
             except Exception as e:
                 log_info(logger, f"Error in validation batch {batch_idx}: {str(e)}")
-                import traceback
-                log_info(logger, traceback.format_exc())
                 continue
 
-    # Calculate overall metrics safely
-    if total > 0:
-        avg_loss = total_loss / len(data_loader)
-        accuracy = 100 * correct / total
-    else:
-        avg_loss = float('inf')
-        accuracy = 0.0
+    # Convert to numpy arrays for easier processing
+    all_predictions = np.array(all_predictions)
+    all_labels = np.array(all_labels)
 
-    # Log overall metrics
-    log_info(logger, f"Validation Loss: {avg_loss:.4f}, Accuracy: {accuracy:.2f}%")
+    # Calculate metrics
+    avg_loss = total_loss / len(data_loader)
+    accuracy = 100 * np.mean(all_predictions == all_labels)
 
-    # Log per-class accuracy for better model evaluation
-    if class_total:
-        class_metrics = "\nPer-class validation accuracy:\n" + "-" * 30 + "\n"
-        for cls_idx in sorted(class_total.keys()):
-            cls_acc = 100 * class_correct[cls_idx] / max(1, class_total[cls_idx])
-            class_metrics += f"Class {cls_idx}: {cls_acc:.2f}% ({class_correct[cls_idx]}/{class_total[cls_idx]})\n"
-        log_info(logger, class_metrics)
+    # Calculate per-class metrics
+    unique_classes = np.unique(all_labels)
+    class_metrics = "\nPer-class validation accuracy:\n" + "-" * 30 + "\n"
+
+    for cls in unique_classes:
+        mask = (all_labels == cls)
+        class_acc = 100 * np.mean(all_predictions[mask] == all_labels[mask])
+        class_count = np.sum(mask)
+        class_metrics += f"Class {cls}: {class_acc:.2f}% ({class_count} samples)\n"
+
+    log_info(logger, class_metrics)
 
     return avg_loss, accuracy
 
@@ -632,7 +606,7 @@ def train_model(model, train_loader, val_loader, args, device, save_dir, logger)
                     log_info(logger, traceback.format_exc())
 
             # Save checkpoint less frequently and safely
-            if (epoch + 1) % 10 == 0 or epoch == 0:
+            if (epoch + 1) % 5 == 0 or epoch == 0:
                 checkpoint_path = os.path.join(save_dir, f"pointnet2_epoch_{epoch+1}.pth")
                 try:
                     torch.save({
@@ -754,19 +728,19 @@ def train_model(model, train_loader, val_loader, args, device, save_dir, logger)
 def main():
     # Optimized training settings
     args = {
-        'data_dir': "/content/drive/MyDrive/Dales/DALESObjects/DALESObjects/train_pts",
-        'save_dir': "/content/drive/MyDrive/Dales/DALESObjects/DALESObjects/models",
-        'points_per_cloud': 1024,     # Number of points to sample per cloud
-        'batch_size': 32,             # Increased for faster training
-        'learning_rate': 0.001,       # Slightly higher learning rate
+        'data_dir': "/content/drive/MyDrive/Dales_pts",
+        'save_dir': "/content/drive/MyDrive/Dales_pts/model",
+        'points_per_cloud': 2048,     # Number of points to sample per cloud
+        'batch_size': 64,             # Increased for faster training
+        'learning_rate': 0.0001,       # Slightly higher learning rate
         'weight_decay': 1e-4,         # Weight decay for regularization
         'epochs': 66,                 # Reduced number of training epochs
         'num_workers': 6,             # Increased DataLoader workers
         'in_dim': 1,                  # Input feature dimension
         'num_classes': 8,             # Output classes (DALES dataset)
         'checkpoint_interval': 5,    # Save checkpoint less frequently
-        'early_stopping_patience': 10, # Early stopping patience
-        'subset_fraction': 0.5,       # Use only 50% of data for faster testing
+        'early_stopping_patience': 30, # Early stopping patience
+        'subset_fraction': 1,       # Use only 50% of data for faster testing
     }
 
     # Setup device and directories
@@ -827,11 +801,11 @@ def main():
             model = PointNet2ClsMSG(
                 in_dim=args['in_dim'],
                 out_dim=args['num_classes'],
-                downsample_points=(2048, 1024, 512, 256),  # Reduced points for efficiency
-                ball_radii=(0.5, 1.0, 5.0, 15.0),          # Multiple scales
+                downsample_points=(256, 128, 64, 32),  # Reduced points for efficiency
+                ball_radii=(0.5, 1.0, 5.0, 10.0),          # Multiple scales
                 neighbor_counts=(16, 64, 64, 32),            # Reduced neighbors for speed
                 head_norm=True,                            # Use normalization in head
-                dropout=0.2                                # Reduced dropout for better stability
+                dropout=0.6                               # Reduced dropout for better stability
             )
 
             # Initialize weights for better convergence
