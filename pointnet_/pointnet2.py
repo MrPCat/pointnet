@@ -329,7 +329,7 @@ class PointNet2ClsMSG(nn.Module):
             in_dim,
             out_dim,
             *,
-            downsample_points=(4096, 2048, 1024, 512),  # As specified
+            downsample_points=(2048, 1024, 512, 256),  # As specified
             ball_radii=(0.5, 1.0, 5.0, 15.0),  # As specified
             neighbor_counts=(16, 64, 64, 32),  # As specified
             head_norm=True,
